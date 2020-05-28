@@ -168,7 +168,7 @@ func (b *Botanist) WaitForExtensionsOperationMigrateToSucceed(ctx context.Contex
 			if extensionSpec := acc.GetExtensionSpec(); extensionSpec != nil {
 				exetnsionType = extensionSpec.GetExtensionType()
 			}
-			return retry.MinorError(fmt.Errorf("extension CR %s with type %s lastOperation was not Migrate=Succeeded", acc.GetName(), exetnsionType))
+			return retry.MinorError(fmt.Errorf("lastOperation for extension CR: %s with name: %s and type: %s is not Migrate=Succeeded", acc.GetName(), acc.GetObjectKind(), exetnsionType))
 		})
 	})
 	if err != nil {

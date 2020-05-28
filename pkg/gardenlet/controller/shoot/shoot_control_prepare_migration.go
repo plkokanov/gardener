@@ -21,6 +21,7 @@ import (
 	"time"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/operation"
@@ -33,6 +34,7 @@ import (
 	retryutils "github.com/gardener/gardener/pkg/utils/retry"
 
 	"github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,11 +80,12 @@ func (c *Controller) prepareShootForMigration(logger *logrus.Entry, shoot *garde
 
 func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation) *gardencorev1beta1helper.WrappedLastErrors {
 	var (
-		namespace       = &corev1.Namespace{}
-		botanist        *botanistpkg.Botanist
-		err             error
-		dnsEnabled      = !o.Shoot.DisableDNS
-		tasksWithErrors []string
+		namespace                    = &corev1.Namespace{}
+		botanist                     *botanistpkg.Botanist
+		err                          error
+		dnsEnabled                   = !o.Shoot.DisableDNS
+		tasksWithErrors              []string
+		kubeAPIServerDeploymentFound = true
 	)
 
 	for _, lastError := range o.Shoot.Info.Status.LastErrors {
@@ -117,6 +120,19 @@ func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation
 			}
 			return nil
 		}),
+		utilerrors.ToExecute("Retrieve kube-apiserver deployment in the shoot namespace in the seed cluster", func() error {
+			deploymentKubeAPIServer := &appsv1.Deployment{}
+			if err := botanist.K8sSeedClient.Client().Get(context.TODO(), kutil.Key(o.Shoot.SeedNamespace, v1beta1constants.DeploymentNameKubeAPIServer), deploymentKubeAPIServer); err != nil {
+				if !apierrors.IsNotFound(err) {
+					return err
+				}
+				kubeAPIServerDeploymentFound = false
+			}
+			if deploymentKubeAPIServer.DeletionTimestamp != nil {
+				kubeAPIServerDeploymentFound = false
+			}
+			return nil
+		}),
 	)
 
 	if err != nil {
@@ -129,6 +145,8 @@ func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation
 	var (
 		nonTerminatingNamespace = namespace.Status.Phase != corev1.NamespaceTerminating
 		defaultTimeout          = 10 * time.Minute
+		cleanupShootResources   = nonTerminatingNamespace && kubeAPIServerDeploymentFound
+		wakeupRequired          = (o.Shoot.Info.Status.IsHibernated || (!o.Shoot.Info.Status.IsHibernated && o.Shoot.HibernationEnabled)) && cleanupShootResources
 		defaultInterval         = 5 * time.Second
 
 		g = flow.NewGraph("Shoot's control plane preparation for migration")
@@ -153,9 +171,9 @@ func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation
 			Dependencies: flow.NewTaskIDs(deployETCD, scaleETCDToOne),
 		})
 		ensureResourceManagerScaledUp = g.Add(flow.Task{
-			Name:         "Ensure that the gardener resource manager is scaled to 1",
+			Name:         "Ensuring that the gardener resource manager is scaled to 1",
 			Fn:           flow.TaskFn(botanist.ScaleGardenerResourceManagerToOne).DoIf(nonTerminatingNamespace),
-			Dependencies: flow.NewTaskIDs(),
+			Dependencies: flow.NewTaskIDs(waitUntilEtcdReady),
 		})
 		keepManagedResourcesObjectsInShoot = g.Add(flow.Task{
 			Name:         "Keep Managed Resources objects in the Shoot",
@@ -163,12 +181,12 @@ func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation
 			Dependencies: flow.NewTaskIDs(ensureResourceManagerScaledUp),
 		})
 		deleteAllManagedResourcesFromShootNamespace = g.Add(flow.Task{
-			Name:         "Deletes all Managed Resources  from the Shoot's namespace",
+			Name:         "Delete all Managed Resources from the Shoot's namespace",
 			Fn:           flow.TaskFn(botanist.DeleteAllManagedResourcesObjects),
 			Dependencies: flow.NewTaskIDs(keepManagedResourcesObjectsInShoot),
 		})
 		waitForManagedResourcesDeletion = g.Add(flow.Task{
-			Name:         "Wait until ManagedResources are deleted",
+			Name:         "Waiting until ManagedResources are deleted",
 			Fn:           flow.TaskFn(botanist.WaitUntilAllManagedResourcesDeleted).Timeout(10 * time.Minute),
 			Dependencies: flow.NewTaskIDs(deleteAllManagedResourcesFromShootNamespace),
 		})
@@ -183,22 +201,22 @@ func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation
 			Dependencies: flow.NewTaskIDs(prepareControlPlaneDeploymentsForMigration),
 		})
 		waitForExtensionCRsOperationMigrateToSucceed = g.Add(flow.Task{
-			Name:         "Waits until all extension CRs are with lastOperation Status Migrate = Succeeded",
+			Name:         "Waiting until the lastOperation of all extension CRs is Migrate=Succeeded",
 			Fn:           botanist.WaitForExtensionsOperationMigrateToSucceed,
 			Dependencies: flow.NewTaskIDs(annotateExtensionCRsForMigration),
 		})
 		deleteAllExtensionCRs = g.Add(flow.Task{
-			Name:         "Deletes all extension CRs from the Shoot namespace",
+			Name:         "Delete all extension CRs from the Shoot namespace",
 			Fn:           botanist.DeleteAllExtensionCRs,
 			Dependencies: flow.NewTaskIDs(waitForExtensionCRsOperationMigrateToSucceed),
 		})
 		waitUntilAPIServerScaledDown = g.Add(flow.Task{
-			Name:         "Wait for Kubernetes API Server to be scaled to zero",
+			Name:         "Waiting for Kubernetes API Server to be scaled to zero",
 			Fn:           flow.TaskFn(botanist.WaitUntilKubeAPIServerScaledDown).SkipIf(o.Shoot.HibernationEnabled || !nonTerminatingNamespace),
 			Dependencies: flow.NewTaskIDs(prepareControlPlaneDeploymentsForMigration),
 		})
 		_ = g.Add(flow.Task{
-			Name:         "Wait for gardener-resource-manager to be scaled to zero",
+			Name:         "Waiting for gardener-resource-manager to be scaled to zero",
 			Fn:           flow.TaskFn(botanist.WaitUntilGardenerResourceManagerScalesDown).SkipIf(o.Shoot.HibernationEnabled || !nonTerminatingNamespace),
 			Dependencies: flow.NewTaskIDs(prepareControlPlaneDeploymentsForMigration),
 		})
@@ -218,12 +236,12 @@ func (c *Controller) runPrepareShootControlPlaneMigration(o *operation.Operation
 			Dependencies: flow.NewTaskIDs(waitUntilAPIServerScaledDown),
 		})
 		createETCDSnapshot = g.Add(flow.Task{
-			Name:         "Create ETCD Snapshot",
+			Name:         "Creating ETCD Snapshot",
 			Fn:           flow.TaskFn(botanist.CreateETCDSnapshot).DoIf(nonTerminatingNamespace),
 			Dependencies: flow.NewTaskIDs(waitUntilAPIServerScaledDown),
 		})
 		scaleETCDToZero = g.Add(flow.Task{
-			Name:         "Scale ETCD to zero",
+			Name:         "Scaling ETCD to zero",
 			Fn:           flow.TaskFn(botanist.ScaleETCDToZero).DoIf(nonTerminatingNamespace),
 			Dependencies: flow.NewTaskIDs(createETCDSnapshot),
 		})

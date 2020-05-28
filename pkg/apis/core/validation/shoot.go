@@ -165,10 +165,10 @@ func ValidateShootSpecUpdate(newSpec, oldSpec *core.ShootSpec, deletionTimestamp
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Region, oldSpec.Region, fldPath.Child("region"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.CloudProfileName, oldSpec.CloudProfileName, fldPath.Child("cloudProfileName"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.SecretBindingName, oldSpec.SecretBindingName, fldPath.Child("secretBindingName"))...)
-	if oldSpec.SeedName != nil {
-		// allow initial seed assignment
-		allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.SeedName, oldSpec.SeedName, fldPath.Child("seedName"))...)
-	}
+	// if oldSpec.SeedName != nil {
+	// 	// allow initial seed assignment
+	// 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.SeedName, oldSpec.SeedName, fldPath.Child("seedName"))...)
+	// }
 
 	seedGotAssigned := oldSpec.SeedName == nil && newSpec.SeedName != nil
 
