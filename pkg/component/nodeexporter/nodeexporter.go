@@ -226,6 +226,8 @@ func (n *nodeExporter) computeResourcesData() (map[string][]byte, error) {
 									"--collector.uname",
 									"--collector.stat",
 									"--collector.pressure",
+									"--collector.textfile",
+									"--collector.textfile.directory=/host/var/log/metrics",
 								},
 								Ports: []corev1.ContainerPort{
 									{
