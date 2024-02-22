@@ -108,8 +108,8 @@ ensure-config-file "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/p
 
 echo "Check if essential config options are initialized"
 check-not-initial "$seed_kubeconfig" ""
-check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 0) | .data'
-check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 1) | .data'
+check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 0) | (select(.data != null) .data, select(.stringData != null) .stringData)'
+check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 1) | (select(.data != null) .data, select(.stringData != null) .stringData)'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 0) | .metadata.annotations.["dns.gardener.cloud/domain"]'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 1) | .metadata.annotations.["dns.gardener.cloud/domain"]'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/controlplane/domain-secrets.yaml 'select(document_index == 0) | .metadata.annotations.["dns.gardener.cloud/provider"]'
@@ -119,7 +119,7 @@ check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/pr
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/project.yaml 'select(document_index == 2) | .metadata.name'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/project.yaml 'select(document_index == 2) | .spec.namespace'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/credentials/infrastructure-secrets.yaml '.metadata.namespace'
-check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/credentials/infrastructure-secrets.yaml '.data'
+check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/credentials/infrastructure-secrets.yaml '(select(.data != null) .data, select(.stringData != null) .stringData)'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/credentials/secretbindings.yaml '.metadata.namespace'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/credentials/secretbindings.yaml '.provider.type'
 check-not-initial "$REPO_ROOT_DIR"/example/provider-extensions/garden/project/credentials/secretbindings.yaml '.secretRef.namespace'
@@ -163,6 +163,7 @@ if kubectl get configmaps -n kube-system shoot-info --kubeconfig "$seed_kubeconf
     .config.seedConfig.spec.provider.region = \"$region\" |
     .config.seedConfig.spec.provider.type = \"$type\"
   " "$REPO_ROOT_DIR"/example/provider-extensions/"$gardenlet_values"
+
 else
   echo "######################################################################################"
   echo "Please enter domain names for registry and relay domains on the seed"
@@ -178,6 +179,17 @@ else
     .config.seedConfig.spec.dns.provider.secretRef.name = \"$internal_dns_secret\" |
     .config.seedConfig.spec.dns.provider.type = \"$dns_provider_type\"
   " "$REPO_ROOT_DIR"/example/provider-extensions/"$gardenlet_values"
+fi
+
+if [[ $(yq .config.seedConfig.spec.provider.zones "$REPO_ROOT_DIR"/example/provider-extensions/"$gardenlet_values") == "[]" ]]; then
+  echo "######################################################################################"
+  echo "Please enter zones for seed separated by a comma"
+  echo "######################################################################################"
+  echo -n "Zones: "
+  read -r -a zones
+  for zone in "${zones[@]}"; do
+    yq -e -i ".config.seedConfig.spec.provider.zones += \"$zone\"" "$REPO_ROOT_DIR"/example/provider-extensions/"$gardenlet_values"
+  done
 fi
 
 if [[ $registry_domain == "$relay_domain" ]]; then
