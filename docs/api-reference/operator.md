@@ -213,6 +213,20 @@ string
 <tbody>
 <tr>
 <td>
+<code>structured</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.StructuredAuthentication">
+StructuredAuthentication
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Structured contains configuration settings for structured authentication to the kube-apiserver.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>webhook</code></br>
 <em>
 <a href="#operator.gardener.cloud/v1alpha1.AuthenticationWebhook">
@@ -3129,6 +3143,37 @@ string
 <td>
 <em>(Optional)</em>
 <p>ClassName is the name of a storage class.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.StructuredAuthentication">StructuredAuthentication
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Authentication">Authentication</a>)
+</p>
+<p>
+<p>StructuredAuthentication contains authentication config for kube-apiserver.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>configMapName</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>ConfigMapName is the name of the ConfigMap in the project namespace
+which contains AuthenticationConfiguration for the kube-apiserver.</p>
 </td>
 </tr>
 </tbody>

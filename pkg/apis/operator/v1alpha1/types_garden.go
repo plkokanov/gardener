@@ -373,9 +373,19 @@ type AuditWebhook struct {
 
 // Authentication contains settings related to authentication.
 type Authentication struct {
+	// Structured contains configuration settings for structured authentication to the kube-apiserver.
+	// +optional
+	Structured *StructuredAuthentication `json:"structured,omitempty"`
 	// Webhook contains settings related to an authentication webhook configuration.
 	// +optional
 	Webhook *AuthenticationWebhook `json:"webhook,omitempty"`
+}
+
+// StructuredAuthentication contains authentication config for kube-apiserver.
+type StructuredAuthentication struct {
+	// ConfigMapName is the name of the ConfigMap in the project namespace
+	// which contains AuthenticationConfiguration for the kube-apiserver.
+	ConfigMapName string `json:"configMapName"`
 }
 
 // AuthenticationWebhook contains settings related to an authentication webhook configuration.

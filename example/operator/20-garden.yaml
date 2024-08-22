@@ -71,6 +71,10 @@ spec:
         # className: default
     kubernetes:
       version: 1.26.1
+      kubeAPIServer:
+        authentication:
+          structured:
+            configMapName: asdf
     # kubeAPIServer:
     #   eventTTL: 1h
     #   featureGates:
