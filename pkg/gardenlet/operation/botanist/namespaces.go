@@ -55,6 +55,9 @@ func (b *Botanist) DeploySeedNamespace(ctx context.Context) error {
 		if b.Shoot.GetInfo().Spec.Networking != nil && b.Shoot.GetInfo().Spec.Networking.Type != nil {
 			metav1.SetMetaDataLabel(&namespace.ObjectMeta, v1beta1constants.LabelNetworkingProvider, *b.Shoot.GetInfo().Spec.Networking.Type)
 		}
+		if b.Shoot.GetInfo().Spec.Kubernetes.KubeAPIServer.EncryptionConfig.ProviderConfig != nil {
+			metav1.SetMetaDataLabel(&namespace.ObjectMeta, v1beta1constants.LabelControlPlaneEncryptionProvider, b.Shoot.GetInfo().Spec.Kubernetes.KubeAPIServer.EncryptionConfig.Type)
+		}
 
 		// Remove all old extension labels before reconciling the new extension labels.
 		for k := range namespace.Labels {

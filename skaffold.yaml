@@ -651,6 +651,7 @@ build:
             - extensions/pkg/controller/cmd
             - extensions/pkg/controller/controlplane
             - extensions/pkg/controller/controlplane/genericactuator
+            - extensions/pkg/controller/controlplaneencryption
             - extensions/pkg/controller/dnsrecord
             - extensions/pkg/controller/extension
             - extensions/pkg/controller/healthcheck
@@ -671,6 +672,7 @@ build:
             - extensions/pkg/webhook/context
             - extensions/pkg/webhook/controlplane
             - extensions/pkg/webhook/controlplane/genericmutator
+            - extensions/pkg/webhook/controlplaneencryption
             - extensions/pkg/webhook/shoot
             - imagevector
             - imagevector/charts.yaml
@@ -781,6 +783,7 @@ build:
             - pkg/provider-local/imagevector/images.yaml
             - pkg/provider-local/local
             - pkg/provider-local/webhook/controlplane
+            - pkg/provider-local/webhook/controlplaneencryption
             - pkg/provider-local/webhook/dnsconfig
             - pkg/provider-local/webhook/networkpolicy
             - pkg/provider-local/webhook/node
@@ -1056,12 +1059,14 @@ build:
             - pkg/component/extensions/backupentry
             - pkg/component/extensions/containerruntime
             - pkg/component/extensions/controlplane
+            - pkg/component/extensions/controlplaneencryption
             - pkg/component/extensions/crds
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_backupbuckets.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_backupentries.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_bastions.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_clusters.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_containerruntimes.yaml
+            - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_controlplaneencryptions.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_controlplanes.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_dnsrecords.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_extensions.yaml

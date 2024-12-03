@@ -7,7 +7,7 @@ package app
 import (
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionscontrolplanecontroller "github.com/gardener/gardener/extensions/pkg/controller/controlplane"
-	extensioncontrolplaneencryptioncontroller "github.com/gardener/gardener/extensions/pkg/controller/controlplaneencryption"
+	extensionscontrolplaneencryptioncontroller "github.com/gardener/gardener/extensions/pkg/controller/controlplaneencryption"
 	extensionsdnsrecordcontroller "github.com/gardener/gardener/extensions/pkg/controller/dnsrecord"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	extensionsheartbeatcontroller "github.com/gardener/gardener/extensions/pkg/controller/heartbeat"
@@ -16,6 +16,7 @@ import (
 	extensionsworkercontroller "github.com/gardener/gardener/extensions/pkg/controller/worker"
 	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
 	extensionscontrolplanewebhook "github.com/gardener/gardener/extensions/pkg/webhook/controlplane"
+	extensionscontrolplaneencryptionwebhook "github.com/gardener/gardener/extensions/pkg/webhook/controlplaneencryption"
 	extensionsshootwebhook "github.com/gardener/gardener/extensions/pkg/webhook/shoot"
 	backupbucketcontroller "github.com/gardener/gardener/pkg/provider-local/controller/backupbucket"
 	backupentrycontroller "github.com/gardener/gardener/pkg/provider-local/controller/backupentry"
@@ -33,6 +34,7 @@ import (
 	servicecontroller "github.com/gardener/gardener/pkg/provider-local/controller/service"
 	workercontroller "github.com/gardener/gardener/pkg/provider-local/controller/worker"
 	controlplanewebhook "github.com/gardener/gardener/pkg/provider-local/webhook/controlplane"
+	controlplaneencryptionwebhook "github.com/gardener/gardener/pkg/provider-local/webhook/controlplaneencryption"
 	dnsconfigwebhook "github.com/gardener/gardener/pkg/provider-local/webhook/dnsconfig"
 	networkpolicywebhook "github.com/gardener/gardener/pkg/provider-local/webhook/networkpolicy"
 	nodewebhook "github.com/gardener/gardener/pkg/provider-local/webhook/node"
@@ -50,7 +52,7 @@ func ControllerSwitchOptions() *extensionscmdcontroller.SwitchOptions {
 		extensionscmdcontroller.Switch(extensionsdnsrecordcontroller.ControllerName, dnsrecordcontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionsinfrastructurecontroller.ControllerName, infrastructurecontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionsworkercontroller.ControllerName, workercontroller.AddToManager),
-		extensionscmdcontroller.Switch(extensioncontrolplaneencryptioncontroller.ControllerName, controlplaneencryptioncontroller.AddToManager),
+		extensionscmdcontroller.Switch(extensionscontrolplaneencryptioncontroller.ControllerName, controlplaneencryptioncontroller.AddToManager),
 		extensionscmdcontroller.Switch(ingresscontroller.ControllerName, ingresscontroller.AddToManager),
 		extensionscmdcontroller.Switch(servicecontroller.ControllerName, servicecontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
@@ -74,5 +76,6 @@ func WebhookSwitchOptions() *extensionscmdwebhook.SwitchOptions {
 		extensionscmdwebhook.Switch(nodewebhook.WebhookNameShoot, nodewebhook.AddShootWebhookToManager),
 		extensionscmdwebhook.Switch(nodeagentosc.WebhookName, nodeagentosc.AddToManager),
 		extensionscmdwebhook.Switch(prometheuswebhook.WebhookName, prometheuswebhook.AddToManager),
+		extensionscmdwebhook.Switch(extensionscontrolplaneencryptionwebhook.WebhookName, controlplaneencryptionwebhook.AddToManager),
 	)
 }

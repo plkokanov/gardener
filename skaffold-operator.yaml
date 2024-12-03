@@ -83,6 +83,7 @@ build:
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_bastions.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_clusters.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_containerruntimes.yaml
+            - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_controlplaneencryptions.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_controlplanes.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_dnsrecords.yaml
             - pkg/component/extensions/crds/assets/crd-extensions.gardener.cloud_extensions.yaml
@@ -992,6 +993,7 @@ build:
             - extensions/pkg/controller/cmd
             - extensions/pkg/controller/controlplane
             - extensions/pkg/controller/controlplane/genericactuator
+            - extensions/pkg/controller/controlplaneencryption
             - extensions/pkg/controller/dnsrecord
             - extensions/pkg/controller/extension
             - extensions/pkg/controller/healthcheck
@@ -1012,6 +1014,7 @@ build:
             - extensions/pkg/webhook/context
             - extensions/pkg/webhook/controlplane
             - extensions/pkg/webhook/controlplane/genericmutator
+            - extensions/pkg/webhook/controlplaneencryption
             - extensions/pkg/webhook/shoot
             - imagevector
             - imagevector/charts.yaml
@@ -1106,6 +1109,7 @@ build:
             - pkg/provider-local/controller/backupentry
             - pkg/provider-local/controller/backupoptions
             - pkg/provider-local/controller/controlplane
+            - pkg/provider-local/controller/controlplaneencryption
             - pkg/provider-local/controller/dnsrecord
             - pkg/provider-local/controller/extension/seed
             - pkg/provider-local/controller/extension/shoot
@@ -1121,6 +1125,7 @@ build:
             - pkg/provider-local/imagevector/images.yaml
             - pkg/provider-local/local
             - pkg/provider-local/webhook/controlplane
+            - pkg/provider-local/webhook/controlplaneencryption
             - pkg/provider-local/webhook/dnsconfig
             - pkg/provider-local/webhook/networkpolicy
             - pkg/provider-local/webhook/node

@@ -440,6 +440,8 @@ const (
 	LabelShootProviderPrefix = "provider.shoot.gardener.cloud/"
 	// LabelNetworkingProvider is used to identify the networking provider for the cni plugin.
 	LabelNetworkingProvider = "networking.shoot.gardener.cloud/provider"
+	// LabelControlPlaneEncryptionProvider is used to identify the control plane encryption provider.
+	LabelControlPlaneEncryptionProvider = "controlplaneencryption.shoot.gardener.cloud/provider"
 	// LabelExtensionPrefix is used to prefix extension specific labels.
 	LabelExtensionPrefix = "extensions.gardener.cloud/"
 	// LabelLogging is a constant for a label for logging stack configurations
@@ -483,8 +485,11 @@ const (
 	// LabelExtensionContainerRuntimeTypePrefix is used to prefix extension label for ContainerRuntime types.
 	LabelExtensionContainerRuntimeTypePrefix = "containerruntime.extensions.gardener.cloud/"
 
-	// LabelExtensionProviderMutatedByControlplaneWebhook is used to specify extension provider controlplane webhook targets
+	// LabelExtensionProviderMutatedByControlplaneWebhook is used to specify extension provider controlplane webhook targets.
 	LabelExtensionProviderMutatedByControlplaneWebhook = LabelExtensionProviderTypePrefix + "mutated-by-controlplane-webhook"
+
+	// LabelExtensionProviderMutatedByControlPlaneEncryptionWebhook is used to specify extension provider controlplaneencryption webhook targets.
+	LabelExtensionProviderMutatedByControlPlaneEncryptionWebhook = LabelExtensionProviderTypePrefix + "mutated-by-controlplaneencryption-webhook"
 
 	// LabelNetworkPolicyToBlockedCIDRs allows Egress from pods labeled with 'networking.gardener.cloud/to-blocked-cidrs=allowed'.
 	LabelNetworkPolicyToBlockedCIDRs = "networking.gardener.cloud/to-blocked-cidrs"
