@@ -37,6 +37,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&CloudProfileConfig{},
 		&WorkerStatus{},
+		&ControlPlaneEncryptionConfig{},
 	)
 
 	return nil

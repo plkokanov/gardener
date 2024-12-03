@@ -7,6 +7,7 @@ package app
 import (
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionscontrolplanecontroller "github.com/gardener/gardener/extensions/pkg/controller/controlplane"
+	extensioncontrolplaneencryptioncontroller "github.com/gardener/gardener/extensions/pkg/controller/controlplaneencryption"
 	extensionsdnsrecordcontroller "github.com/gardener/gardener/extensions/pkg/controller/dnsrecord"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	extensionsheartbeatcontroller "github.com/gardener/gardener/extensions/pkg/controller/heartbeat"
@@ -19,6 +20,7 @@ import (
 	backupbucketcontroller "github.com/gardener/gardener/pkg/provider-local/controller/backupbucket"
 	backupentrycontroller "github.com/gardener/gardener/pkg/provider-local/controller/backupentry"
 	controlplanecontroller "github.com/gardener/gardener/pkg/provider-local/controller/controlplane"
+	controlplaneencryptioncontroller "github.com/gardener/gardener/pkg/provider-local/controller/controlplaneencryption"
 	dnsrecordcontroller "github.com/gardener/gardener/pkg/provider-local/controller/dnsrecord"
 	localextensionseedcontroller "github.com/gardener/gardener/pkg/provider-local/controller/extension/seed"
 	localextensionshootcontroller "github.com/gardener/gardener/pkg/provider-local/controller/extension/shoot"
@@ -48,6 +50,7 @@ func ControllerSwitchOptions() *extensionscmdcontroller.SwitchOptions {
 		extensionscmdcontroller.Switch(extensionsdnsrecordcontroller.ControllerName, dnsrecordcontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionsinfrastructurecontroller.ControllerName, infrastructurecontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionsworkercontroller.ControllerName, workercontroller.AddToManager),
+		extensionscmdcontroller.Switch(extensioncontrolplaneencryptioncontroller.ControllerName, controlplaneencryptioncontroller.AddToManager),
 		extensionscmdcontroller.Switch(ingresscontroller.ControllerName, ingresscontroller.AddToManager),
 		extensionscmdcontroller.Switch(servicecontroller.ControllerName, servicecontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),

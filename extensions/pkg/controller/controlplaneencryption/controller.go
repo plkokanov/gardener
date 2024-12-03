@@ -23,7 +23,7 @@ const (
 	// FinalizerName is the dnsrecord controller finalizer.
 	FinalizerName = "extensions.gardener.cloud/controlplaneencryption"
 	// ControllerName is the name of the controller
-	ControllerName = "dnsrecord"
+	ControllerName = "controlplaneencryption"
 )
 
 // AddArgs are arguments for adding a DNSRecord controller to a manager.
@@ -54,7 +54,7 @@ func DefaultPredicates(ctx context.Context, mgr manager.Manager, ignoreOperation
 	)
 }
 
-// Add creates a new dnsrecord controller and adds it to the given Manager.
+// Add creates a new controlplaneencryption controller and adds it to the given Manager.
 func Add(ctx context.Context, mgr manager.Manager, args AddArgs) error {
 	args.ControllerOptions.Reconciler = NewReconciler(mgr, args.Actuator)
 
