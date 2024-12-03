@@ -24,9 +24,13 @@ func main() {
 	if *key == "" {
 		log.Fatal("key must not be empty")
 	}
-	kmsservice.NewGRPCService(*addr, time.Second*5, svc{
+	grpcSvc := kmsservice.NewGRPCService(*addr, time.Second*5, svc{
 		key: *key,
 	})
+	log.Printf("serving on %s", *addr)
+	if err := grpcSvc.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 type svc struct {
