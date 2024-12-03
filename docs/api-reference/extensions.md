@@ -22,6 +22,8 @@ Resource Types:
 </li><li>
 <a href="#extensions.gardener.cloud/v1alpha1.ControlPlane">ControlPlane</a>
 </li><li>
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryption">ControlPlaneEncryption</a>
+</li><li>
 <a href="#extensions.gardener.cloud/v1alpha1.DNSRecord">DNSRecord</a>
 </li><li>
 <a href="#extensions.gardener.cloud/v1alpha1.Extension">Extension</a>
@@ -778,6 +780,99 @@ Kubernetes core/v1.SecretReference
 <em>
 <a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneStatus">
 ControlPlaneStatus
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="extensions.gardener.cloud/v1alpha1.ControlPlaneEncryption">ControlPlaneEncryption
+</h3>
+<p>
+<p>ControlPlaneEncryption is a specification for a ControlPlane resource.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+extensions.gardener.cloud/v1alpha1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>ControlPlaneEncryption</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionSpec">
+ControlPlaneEncryptionSpec
+</a>
+</em>
+</td>
+<td>
+<p>Specification of the ControlPlane.
+If the object&rsquo;s deletion timestamp is set, this field is immutable.</p>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>DefaultSpec</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.DefaultSpec">
+DefaultSpec
+</a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>DefaultSpec</code> are embedded into this type.)
+</p>
+<p>DefaultSpec is a structure containing common fields used by all extension resources.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionStatus">
+ControlPlaneEncryptionStatus
 </a>
 </em>
 </td>
@@ -2503,6 +2598,102 @@ string
 </tr>
 </tbody>
 </table>
+<h3 id="extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionSpec">ControlPlaneEncryptionSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryption">ControlPlaneEncryption</a>)
+</p>
+<p>
+<p>ControlPlaneEncryptionSpec is the spec for a ControlPlaneEncryption resource.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>DefaultSpec</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.DefaultSpec">
+DefaultSpec
+</a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>DefaultSpec</code> are embedded into this type.)
+</p>
+<p>DefaultSpec is a structure containing common fields used by all extension resources.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionStatus">ControlPlaneEncryptionStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryption">ControlPlaneEncryption</a>)
+</p>
+<p>
+<p>ControlPlaneEncryptionStatus is the status for a ControlPlaneEncryption resource.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>DefaultStatus</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.DefaultStatus">
+DefaultStatus
+</a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>DefaultStatus</code> are embedded into this type.)
+</p>
+<p>DefaultStatus is a structure containing common fields used by all extension resources.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>activeProviderEncryptionConfigs</code></br>
+<em>
+<a href="https://godoc.org/k8s.io/apimachinery/pkg/runtime#RawExtension">
+[]*k8s.io/apimachinery/pkg/runtime.RawExtension
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ActiveProviderEncryptionConfigs specifies the currently used provider encryption configs.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>apiServerKmsEncryptionConfigs</code></br>
+<em>
+[]k8s.io/apiserver/pkg/apis/apiserver/v1.KMSConfiguration
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KMSEncryptionConfigs specifies the currently used kms encryption configs.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="extensions.gardener.cloud/v1alpha1.ControlPlaneSpec">ControlPlaneSpec
 </h3>
 <p>
@@ -2924,6 +3115,7 @@ bool
 <a href="#extensions.gardener.cloud/v1alpha1.BackupEntrySpec">BackupEntrySpec</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.BastionSpec">BastionSpec</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.ContainerRuntimeSpec">ContainerRuntimeSpec</a>, 
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionSpec">ControlPlaneEncryptionSpec</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneSpec">ControlPlaneSpec</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.DNSRecordSpec">DNSRecordSpec</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.ExtensionSpec">ExtensionSpec</a>, 
@@ -2992,6 +3184,7 @@ k8s.io/apimachinery/pkg/runtime.RawExtension
 <a href="#extensions.gardener.cloud/v1alpha1.BackupEntryStatus">BackupEntryStatus</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.BastionStatus">BastionStatus</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.ContainerRuntimeStatus">ContainerRuntimeStatus</a>, 
+<a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionStatus">ControlPlaneEncryptionStatus</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.ControlPlaneStatus">ControlPlaneStatus</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.DNSRecordStatus">DNSRecordStatus</a>, 
 <a href="#extensions.gardener.cloud/v1alpha1.ExtensionStatus">ExtensionStatus</a>, 
