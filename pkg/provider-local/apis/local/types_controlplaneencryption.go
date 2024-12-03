@@ -17,7 +17,7 @@ const (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ControlplaneEncryptionConfig contains provider-specific controlplane encryption config
+// ControlPlaneEncryptionConfig contains provider-specific controlplane encryption config
 type ControlPlaneEncryptionConfig struct {
 	metav1.TypeMeta
 	// KeyType
