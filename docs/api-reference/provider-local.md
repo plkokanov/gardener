@@ -111,6 +111,43 @@ reconciliation is possible.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="local.provider.extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionConfig">ControlPlaneEncryptionConfig
+</h3>
+<p>
+<p>ControlPlaneEncryptionConfig contains provider-specific controlplane encryption config</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>KeyType</code></br>
+<em>
+<a href="#local.provider.extensions.gardener.cloud/v1alpha1.KeyType">
+KeyType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KeyType</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="local.provider.extensions.gardener.cloud/v1alpha1.KeyType">KeyType
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#local.provider.extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionConfig">ControlPlaneEncryptionConfig</a>)
+</p>
+<p>
+</p>
 <h3 id="local.provider.extensions.gardener.cloud/v1alpha1.MachineImage">MachineImage
 </h3>
 <p>
