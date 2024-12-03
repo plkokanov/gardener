@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package controlplaneencryption
 
 import (
@@ -20,11 +24,13 @@ import (
 // TimeNow returns the current time. Exposed for testing.
 var TimeNow = time.Now
 
+// Interface is the interface for the ControlPlaneEncryption.
 type Interface interface {
 	component.DeployWaiter
 	KubeAPIServerKMSEncryptionConfigurations() []apiserverconfigv1.KMSConfiguration
 }
 
+// Values are the values fr the ControlPlaneEncryption.
 type Values struct {
 	// Namespace is the Shoot namespace in the seed.
 	Namespace string

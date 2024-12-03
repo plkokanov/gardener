@@ -36,7 +36,7 @@ type ensurer struct {
 	logger logr.Logger
 }
 
-func (e *ensurer) EnsureKubeApiserverDeployment(ctx context.Context, controlPlaneEncryption *extensionsv1alpha1.ControlPlaneEncryption, new *appsv1.Deployment) error {
+func (e *ensurer) EnsureKubeApiserverDeployment(_ context.Context, controlPlaneEncryption *extensionsv1alpha1.ControlPlaneEncryption, new *appsv1.Deployment) error {
 	image, err := imagevector.ImageVector().FindImage(imagevector.ImageNameKMSPluginProviderLocal)
 	if err != nil {
 		return err

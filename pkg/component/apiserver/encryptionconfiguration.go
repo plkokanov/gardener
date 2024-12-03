@@ -73,15 +73,12 @@ func ReconcileSecretETCDEncryptionConfiguration(
 	)
 
 	if len(config.ExternalKMSProviderConfigs) == 0 {
-		encryptionConfiguration, err = generateEncryptionConfigWithLocalProvider(ctx, c, secretsManager, config, secretNameETCDEncryptionKey)
+		encryptionConfiguration, err = generateEncryptionConfigWithLocalProvider(ctx, secretsManager, config, secretNameETCDEncryptionKey)
 		if err != nil {
 			return err
 		}
 	} else {
-		encryptionConfiguration, err = generateEncryptionConfigWithKMSProvider(config)
-		if err != nil {
-			return err
-		}
+		encryptionConfiguration = generateEncryptionConfigWithKMSProvider(config)
 	}
 
 	data, err := runtime.Encode(encryptionCodec, encryptionConfiguration)
@@ -107,7 +104,7 @@ func ReconcileSecretETCDEncryptionConfiguration(
 	return c.Patch(ctx, secretETCDEncryptionConfiguration, patch)
 }
 
-func generateEncryptionConfigWithLocalProvider(ctx context.Context, c client.Client, secretsManager secretsmanager.Interface, config ETCDEncryptionConfig, secretNameETCDEncryptionKey string) (*apiserverconfigv1.EncryptionConfiguration, error) {
+func generateEncryptionConfigWithLocalProvider(ctx context.Context, secretsManager secretsmanager.Interface, config ETCDEncryptionConfig, secretNameETCDEncryptionKey string) (*apiserverconfigv1.EncryptionConfiguration, error) {
 	options := []secretsmanager.GenerateOption{
 		secretsmanager.Persist(),
 		secretsmanager.Rotate(secretsmanager.KeepOld),
@@ -169,7 +166,7 @@ func generateEncryptionConfigWithLocalProvider(ctx context.Context, c client.Cli
 	return encryptionConfiguration, nil
 }
 
-func generateEncryptionConfigWithKMSProvider(config ETCDEncryptionConfig) (*apiserverconfigv1.EncryptionConfiguration, error) {
+func generateEncryptionConfigWithKMSProvider(config ETCDEncryptionConfig) *apiserverconfigv1.EncryptionConfiguration {
 	encryptionConfiguration := &apiserverconfigv1.EncryptionConfiguration{
 		Resources: []apiserverconfigv1.ResourceConfiguration{
 			{
@@ -203,7 +200,7 @@ func generateEncryptionConfigWithKMSProvider(config ETCDEncryptionConfig) (*apis
 		}
 	}
 
-	return encryptionConfiguration, nil
+	return encryptionConfiguration
 }
 
 func etcdEncryptionAESKeys(keySecretCurrent, keySecretOld *corev1.Secret, encryptWithCurrentKey bool) []apiserverconfigv1.Key {

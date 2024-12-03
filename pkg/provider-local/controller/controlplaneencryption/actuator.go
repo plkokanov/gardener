@@ -33,7 +33,7 @@ func NewActuator(mgr manager.Manager) controlplaneencryption.Actuator {
 	}
 }
 
-func (a *actuator) Reconcile(ctx context.Context, logger logr.Logger, encryption *extensionsv1alpha1.ControlPlaneEncryption, cluster *extensionscontroller.Cluster) error {
+func (a *actuator) Reconcile(ctx context.Context, _ logr.Logger, encryption *extensionsv1alpha1.ControlPlaneEncryption, _ *extensionscontroller.Cluster) error {
 	if encryption.Spec.ProviderConfig == nil {
 		return errors.New("empty providerconfig")
 	}
@@ -60,7 +60,7 @@ func (a *actuator) Reconcile(ctx context.Context, logger logr.Logger, encryption
 	return a.client.Status().Patch(ctx, encryption, patch)
 }
 
-func (a *actuator) Delete(ctx context.Context, logger logr.Logger, encryption *extensionsv1alpha1.ControlPlaneEncryption, cluster *extensionscontroller.Cluster) error {
+func (a *actuator) Delete(_ context.Context, _ logr.Logger, _ *extensionsv1alpha1.ControlPlaneEncryption, _ *extensionscontroller.Cluster) error {
 	return nil
 }
 

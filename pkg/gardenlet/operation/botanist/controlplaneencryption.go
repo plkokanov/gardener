@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package botanist
 
 import (
@@ -5,7 +9,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/extensions/controlplaneencryption"
 )
 
-// DefaultContainerRuntime creates the default deployer for the ContainerRuntime custom resource.
+// DefaultControlPlaneEncryption creates the default deployer for the ControlPlaneEncryption custom resource.
 func (b *Botanist) DefaultControlPlaneEncryption() controlplaneencryption.Interface {
 	return controlplaneencryption.New(
 		b.Logger,

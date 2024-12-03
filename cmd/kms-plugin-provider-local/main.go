@@ -38,7 +38,7 @@ type svc struct {
 }
 
 // Decrypt implements service.Service.
-func (s svc) Decrypt(ctx context.Context, uid string, req *kmsservice.DecryptRequest) ([]byte, error) {
+func (s svc) Decrypt(_ context.Context, _ string, req *kmsservice.DecryptRequest) ([]byte, error) {
 	if req.KeyID != s.key {
 		return nil, nil
 	}
@@ -46,7 +46,7 @@ func (s svc) Decrypt(ctx context.Context, uid string, req *kmsservice.DecryptReq
 }
 
 // Encrypt implements service.Service.
-func (s svc) Encrypt(ctx context.Context, uid string, data []byte) (*kmsservice.EncryptResponse, error) {
+func (s svc) Encrypt(_ context.Context, _ string, data []byte) (*kmsservice.EncryptResponse, error) {
 	ciphertext := encrypt([]byte(s.key), data)
 	return &kmsservice.EncryptResponse{
 		Ciphertext: ciphertext,
@@ -55,7 +55,7 @@ func (s svc) Encrypt(ctx context.Context, uid string, data []byte) (*kmsservice.
 }
 
 // Status implements service.Service.
-func (s svc) Status(ctx context.Context) (*kmsservice.StatusResponse, error) {
+func (s svc) Status(_ context.Context) (*kmsservice.StatusResponse, error) {
 	return &kmsservice.StatusResponse{
 		Version: "v2",
 		Healthz: "ok",
