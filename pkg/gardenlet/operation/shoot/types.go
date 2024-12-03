@@ -23,6 +23,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/etcd/etcd"
 	"github.com/gardener/gardener/pkg/component/extensions/containerruntime"
 	"github.com/gardener/gardener/pkg/component/extensions/controlplane"
+	"github.com/gardener/gardener/pkg/component/extensions/controlplaneencryption"
 	"github.com/gardener/gardener/pkg/component/extensions/dnsrecord"
 	"github.com/gardener/gardener/pkg/component/extensions/extension"
 	"github.com/gardener/gardener/pkg/component/extensions/infrastructure"
@@ -84,6 +85,7 @@ type Shoot struct {
 
 	Purpose                                 gardencorev1beta1.ShootPurpose
 	IsWorkerless                            bool
+	UsesExternalEncryptionProvider          bool
 	WantsClusterAutoscaler                  bool
 	WantsVerticalPodAutoscaler              bool
 	WantsAlertmanager                       bool
@@ -146,17 +148,18 @@ type ControlPlane struct {
 
 // Extensions contains references to extension resources.
 type Extensions struct {
-	ContainerRuntime      containerruntime.Interface
-	ControlPlane          controlplane.Interface
-	ControlPlaneExposure  controlplane.Interface
-	ExternalDNSRecord     dnsrecord.Interface
-	InternalDNSRecord     dnsrecord.Interface
-	IngressDNSRecord      dnsrecord.Interface
-	Extension             extension.Interface
-	Infrastructure        infrastructure.Interface
-	Network               network.Interface
-	OperatingSystemConfig operatingsystemconfig.Interface
-	Worker                worker.Interface
+	ContainerRuntime       containerruntime.Interface
+	ControlPlane           controlplane.Interface
+	ControlPlaneExposure   controlplane.Interface
+	ControlPlaneEncryption controlplaneencryption.Interface
+	ExternalDNSRecord      dnsrecord.Interface
+	InternalDNSRecord      dnsrecord.Interface
+	IngressDNSRecord       dnsrecord.Interface
+	Extension              extension.Interface
+	Infrastructure         infrastructure.Interface
+	Network                network.Interface
+	OperatingSystemConfig  operatingsystemconfig.Interface
+	Worker                 worker.Interface
 }
 
 // SystemComponents contains references to system components.

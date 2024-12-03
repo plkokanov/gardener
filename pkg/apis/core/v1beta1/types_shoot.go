@@ -970,6 +970,11 @@ type EncryptionConfig struct {
 	// Wildcards are not supported for now.
 	// See https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md for more details.
 	Resources []string `json:"resources" protobuf:"bytes,1,rep,name=resources"`
+	// ProviderConfig specifies provider specifc encryption configuration, e.g. a KMS encryption config.
+	// +optional
+	ProviderConfig *runtime.RawExtension `json:"providerConfig,omitempty" protobuf:"bytes,2,rep,name=providerConfig"`
+	// Type is the type of the provider used for the encryption configuration.
+	Type string `json:"type,omitempty" protobuf:"bytes,3,rep,name=type"`
 }
 
 // ServiceAccountConfig is the kube-apiserver configuration for service accounts.

@@ -5223,6 +5223,31 @@ Wildcards are not supported for now.
 See <a href="https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md">https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md</a> for more details.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>providerConfig</code></br>
+<em>
+<a href="https://godoc.org/k8s.io/apimachinery/pkg/runtime#RawExtension">
+k8s.io/apimachinery/pkg/runtime.RawExtension
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ProviderConfig specifies provider specifc encryption configuration, e.g. a KMS encryption config.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>type</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Type is the type of the provider used for the encryption configuration.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="core.gardener.cloud/v1beta1.ErrorCode">ErrorCode

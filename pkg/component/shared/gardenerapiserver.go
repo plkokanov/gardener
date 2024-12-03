@@ -129,6 +129,7 @@ func DeployGardenerAPIServer(
 		etcdEncryptionKeyRotationPhase,
 		append(resourcesToEncrypt, sets.List(gardenerutils.DefaultGardenerResourcesForEncryption())...),
 		append(encryptedResources, sets.List(gardenerutils.DefaultGardenerResourcesForEncryption())...),
+		nil,
 	)
 	if err != nil {
 		return err

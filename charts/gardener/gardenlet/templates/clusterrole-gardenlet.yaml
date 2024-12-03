@@ -239,6 +239,7 @@ rules:
   - clusters
   - containerruntimes
   - controlplanes
+  - controlplaneencryptions
   - dnsrecords
   - extensions
   - infrastructures
@@ -260,6 +261,7 @@ rules:
   - backupentries/status
   - containerruntimes/status
   - controlplanes/status
+  - controlplaneencryptions/status
   - dnsrecords/status
   - extensions/status
   - infrastructures/status

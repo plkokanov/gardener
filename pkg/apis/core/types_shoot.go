@@ -734,6 +734,11 @@ type EncryptionConfig struct {
 	// Wildcards are not supported for now.
 	// See https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md for more details.
 	Resources []string
+	// ProviderConfig specifies provider specifc encryption configuration, e.g. a KMS encryption config.
+	// +optional
+	ProviderConfig *runtime.RawExtension
+	// Type is the type of the provider used for the encryption configuration.
+	Type string
 }
 
 // ServiceAccountConfig is the kube-apiserver configuration for service accounts.

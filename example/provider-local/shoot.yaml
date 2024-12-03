@@ -27,6 +27,11 @@ spec:
       maxSurge: 1
       maxUnavailable: 0
   kubernetes:
+    kubeAPIServer:
+      encryptionConfig:
+        providerConfig:
+          keyid: "foo"
+        type: "local"
     kubelet:
       seccompDefault: true
       serializeImagePulls: false

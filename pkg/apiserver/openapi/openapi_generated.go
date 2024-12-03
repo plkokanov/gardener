@@ -3569,10 +3569,25 @@ func schema_pkg_apis_core_v1beta1_EncryptionConfig(ref common.ReferenceCallback)
 							},
 						},
 					},
+					"providerConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProviderConfig specifies provider specifc encryption configuration, e.g. a KMS encryption config.",
+							Ref:         ref("k8s.io/apimachinery/pkg/runtime.RawExtension"),
+						},
+					},
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type is the type of the provider used for the encryption configuration.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"resources"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/runtime.RawExtension"},
 	}
 }
 

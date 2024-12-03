@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	admissionapiv1 "k8s.io/pod-security-admission/admission/api/v1"
 	admissionapiv1alpha1 "k8s.io/pod-security-admission/admission/api/v1alpha1"
 	admissionapiv1beta1 "k8s.io/pod-security-admission/admission/api/v1beta1"
@@ -215,6 +216,7 @@ func DeployKubeAPIServer(
 	resourcesToEncrypt []string,
 	encryptedResources []string,
 	etcdEncryptionKeyRotationPhase gardencorev1beta1.CredentialsRotationPhase,
+	externalKMSProviderConfigs []apiserverconfigv1.KMSConfiguration,
 	wantScaleDown bool,
 ) error {
 	var (
@@ -264,6 +266,7 @@ func DeployKubeAPIServer(
 		etcdEncryptionKeyRotationPhase,
 		append(resourcesToEncrypt, sets.List(gardenerutils.DefaultResourcesForEncryption())...),
 		append(encryptedResources, sets.List(gardenerutils.DefaultResourcesForEncryption())...),
+		externalKMSProviderConfigs,
 	)
 	if err != nil {
 		return err

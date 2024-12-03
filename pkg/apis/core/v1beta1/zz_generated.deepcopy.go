@@ -1719,6 +1719,11 @@ func (in *EncryptionConfig) DeepCopyInto(out *EncryptionConfig) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ProviderConfig != nil {
+		in, out := &in.ProviderConfig, &out.ProviderConfig
+		*out = new(runtime.RawExtension)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

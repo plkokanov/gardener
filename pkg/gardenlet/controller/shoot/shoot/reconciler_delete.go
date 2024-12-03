@@ -733,10 +733,20 @@ func (r *Reconciler) runDeleteShootFlow(ctx context.Context, o *operation.Operat
 			Fn:           flow.TaskFn(botanist.WaitUntilEtcdsDeleted).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(syncPoint, destroyEtcd),
 		})
+		destroyControlPlaneEncryption = g.Add(flow.Task{
+			Name:         "Destroying control plane encryption",
+			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Destroy).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Dependencies: flow.NewTaskIDs(waitUntilEtcdDeleted),
+		})
+		waitUntilControlPlaneEncryptionDeleted = g.Add(flow.Task{
+			Name:         "Waiting until control plane encryption has been destroyed",
+			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.WaitCleanup).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Dependencies: flow.NewTaskIDs(destroyControlPlaneEncryption),
+		})
 		deleteNamespace = g.Add(flow.Task{
 			Name:         "Deleting shoot namespace in Seed",
 			Fn:           flow.TaskFn(botanist.DeleteSeedNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),
-			Dependencies: flow.NewTaskIDs(syncPoint, destroyInternalDomainDNSRecord, destroyReferencedResources, waitUntilEtcdDeleted),
+			Dependencies: flow.NewTaskIDs(syncPoint, destroyInternalDomainDNSRecord, destroyReferencedResources, waitUntilEtcdDeleted, waitUntilControlPlaneEncryptionDeleted),
 		})
 		_ = g.Add(flow.Task{
 			Name:         "Waiting until shoot namespace in Seed has been deleted",

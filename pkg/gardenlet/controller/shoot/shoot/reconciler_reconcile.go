@@ -308,6 +308,17 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			SkipIf:       o.Shoot.HibernationEnabled || skipReadiness,
 			Dependencies: flow.NewTaskIDs(deployExtensionResourcesBeforeKAPI),
 		})
+		deployControlPlaneEncryption = g.Add(flow.Task{
+			Name:   "Deploying shoot control plane encryption components",
+			Fn:     flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Deploy),
+			SkipIf: !o.Shoot.UsesExternalEncryptionProvider,
+		})
+		waitUntilControlPlaneEncryptionReady = g.Add(flow.Task{
+			Name:         "Waiting until shoot control plane encryption has been reconciled",
+			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Wait),
+			SkipIf:       !o.Shoot.UsesExternalEncryptionProvider,
+			Dependencies: flow.NewTaskIDs(deployControlPlaneEncryption),
+		})
 		deployKubeAPIServer = g.Add(flow.Task{
 			Name: "Deploying Kubernetes API server",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
@@ -319,7 +330,8 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 				waitUntilEtcdReady,
 				waitUntilKubeAPIServerServiceIsReady,
 				waitUntilExtensionResourcesBeforeKAPIReady,
-			).InsertIf(!hasNodesCIDR, waitUntilInfrastructureReady),
+				waitUntilControlPlaneEncryptionReady,
+			).InsertIf(!staticNodesCIDR, waitUntilInfrastructureReady),
 		})
 		waitUntilKubeAPIServerIsReady = g.Add(flow.Task{
 			Name:         "Waiting until Kubernetes API server rolled out",

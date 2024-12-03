@@ -67,6 +67,47 @@ func ReconcileSecretETCDEncryptionConfiguration(
 	secretNameETCDEncryptionKey string,
 	roleLabel string,
 ) error {
+	var (
+		encryptionConfiguration *apiserverconfigv1.EncryptionConfiguration
+		err                     error
+	)
+
+	if len(config.ExternalKMSProviderConfigs) == 0 {
+		encryptionConfiguration, err = generateEncryptionConfigWithLocalProvider(ctx, c, secretsManager, config, secretNameETCDEncryptionKey)
+		if err != nil {
+			return err
+		}
+	} else {
+		encryptionConfiguration, err = generateEncryptionConfigWithKMSProvider(config)
+		if err != nil {
+			return err
+		}
+	}
+
+	data, err := runtime.Encode(encryptionCodec, encryptionConfiguration)
+	if err != nil {
+		return err
+	}
+
+	secretETCDEncryptionConfiguration.Labels = map[string]string{v1beta1constants.LabelRole: roleLabel}
+	secretETCDEncryptionConfiguration.Data = map[string][]byte{secretETCDEncryptionConfigurationDataKey: data}
+	utilruntime.Must(kubernetesutils.MakeUnique(secretETCDEncryptionConfiguration))
+	desiredLabels := utils.MergeStringMaps(secretETCDEncryptionConfiguration.Labels) // copy
+
+	if err := c.Create(ctx, secretETCDEncryptionConfiguration); err == nil || !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	// creation of secret failed as it already exists => reconcile labels of existing secret
+	if err := c.Get(ctx, client.ObjectKeyFromObject(secretETCDEncryptionConfiguration), secretETCDEncryptionConfiguration); err != nil {
+		return err
+	}
+	patch := client.MergeFrom(secretETCDEncryptionConfiguration.DeepCopy())
+	secretETCDEncryptionConfiguration.Labels = desiredLabels
+	return c.Patch(ctx, secretETCDEncryptionConfiguration, patch)
+}
+
+func generateEncryptionConfigWithLocalProvider(ctx context.Context, c client.Client, secretsManager secretsmanager.Interface, config ETCDEncryptionConfig, secretNameETCDEncryptionKey string) (*apiserverconfigv1.EncryptionConfiguration, error) {
 	options := []secretsmanager.GenerateOption{
 		secretsmanager.Persist(),
 		secretsmanager.Rotate(secretsmanager.KeepOld),
@@ -81,7 +122,7 @@ func ReconcileSecretETCDEncryptionConfiguration(
 		SecretLength: 32,
 	}, options...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var (
@@ -125,27 +166,44 @@ func ReconcileSecretETCDEncryptionConfiguration(
 		}
 	}
 
-	data, err := runtime.Encode(encryptionCodec, encryptionConfiguration)
-	if err != nil {
-		return err
+	return encryptionConfiguration, nil
+}
+
+func generateEncryptionConfigWithKMSProvider(config ETCDEncryptionConfig) (*apiserverconfigv1.EncryptionConfiguration, error) {
+	encryptionConfiguration := &apiserverconfigv1.EncryptionConfiguration{
+		Resources: []apiserverconfigv1.ResourceConfiguration{
+			{
+				Resources: config.ResourcesToEncrypt,
+				Providers: []apiserverconfigv1.ProviderConfiguration{
+					{
+						KMS: &config.ExternalKMSProviderConfigs[0],
+					},
+					{
+						Identity: &apiserverconfigv1.IdentityConfiguration{},
+					},
+				},
+			},
+		},
 	}
 
-	secretETCDEncryptionConfiguration.Labels = map[string]string{v1beta1constants.LabelRole: roleLabel}
-	secretETCDEncryptionConfiguration.Data = map[string][]byte{secretETCDEncryptionConfigurationDataKey: data}
-	utilruntime.Must(kubernetesutils.MakeUnique(secretETCDEncryptionConfiguration))
-	desiredLabels := utils.MergeStringMaps(secretETCDEncryptionConfiguration.Labels) // copy
-
-	if err := c.Create(ctx, secretETCDEncryptionConfiguration); err == nil || !apierrors.IsAlreadyExists(err) {
-		return err
+	if !reflect.DeepEqual(config.ResourcesToEncrypt, config.EncryptedResources) {
+		removedResources := sets.New(config.EncryptedResources...).Difference(sets.New(config.ResourcesToEncrypt...))
+		if removedResources.Len() > 0 {
+			encryptionConfiguration.Resources = append(encryptionConfiguration.Resources, apiserverconfigv1.ResourceConfiguration{
+				Resources: sets.List(removedResources),
+				Providers: []apiserverconfigv1.ProviderConfiguration{
+					{
+						Identity: &apiserverconfigv1.IdentityConfiguration{},
+					},
+					{
+						KMS: &config.ExternalKMSProviderConfigs[0],
+					},
+				},
+			})
+		}
 	}
 
-	// creation of secret failed as it already exists => reconcile labels of existing secret
-	if err := c.Get(ctx, client.ObjectKeyFromObject(secretETCDEncryptionConfiguration), secretETCDEncryptionConfiguration); err != nil {
-		return err
-	}
-	patch := client.MergeFrom(secretETCDEncryptionConfiguration.DeepCopy())
-	secretETCDEncryptionConfiguration.Labels = desiredLabels
-	return c.Patch(ctx, secretETCDEncryptionConfiguration, patch)
+	return encryptionConfiguration, nil
 }
 
 func etcdEncryptionAESKeys(keySecretCurrent, keySecretOld *corev1.Secret, encryptWithCurrentKey bool) []apiserverconfigv1.Key {

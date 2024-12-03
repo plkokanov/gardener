@@ -607,6 +607,12 @@ spec:
                             description: EncryptionConfig contains customizable encryption
                               configuration of the Gardener API server.
                             properties:
+                              providerConfig:
+                                description: ProviderConfig specifies provider specifc
+                                  encryption configuration, e.g. a KMS encryption
+                                  config.
+                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                               resources:
                                 description: |-
                                   Resources contains the list of resources that shall be encrypted in addition to secrets.
@@ -616,6 +622,10 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                              type:
+                                description: Type is the type of the provider used
+                                  for the encryption configuration.
+                                type: string
                             required:
                             - resources
                             type: object
@@ -1438,6 +1448,12 @@ spec:
                             description: EncryptionConfig contains customizable encryption
                               configuration of the Kube API server.
                             properties:
+                              providerConfig:
+                                description: ProviderConfig specifies provider specifc
+                                  encryption configuration, e.g. a KMS encryption
+                                  config.
+                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                               resources:
                                 description: |-
                                   Resources contains the list of resources that shall be encrypted in addition to secrets.
@@ -1447,6 +1463,10 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                              type:
+                                description: Type is the type of the provider used
+                                  for the encryption configuration.
+                                type: string
                             required:
                             - resources
                             type: object

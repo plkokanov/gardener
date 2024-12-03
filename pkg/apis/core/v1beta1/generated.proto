@@ -929,6 +929,13 @@ message EncryptionConfig {
   // Wildcards are not supported for now.
   // See https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md for more details.
   repeated string resources = 1;
+
+  // ProviderConfig specifies provider specifc encryption configuration, e.g. a KMS encryption config.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.runtime.RawExtension providerConfig = 2;
+
+  // Type is the type of the provider used for the encryption configuration.
+  optional string type = 3;
 }
 
 // ExpirableVersion contains a version and an expiration date.

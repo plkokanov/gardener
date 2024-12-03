@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	apiserverv1beta1 "k8s.io/apiserver/pkg/apis/apiserver/v1beta1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -247,15 +248,17 @@ func computeAPIServerETCDEncryptionConfig(
 	etcdEncryptionKeyRotationPhase gardencorev1beta1.CredentialsRotationPhase,
 	resourcesToEncrypt []string,
 	encryptedResources []string,
+	externalKMSProviderConfigs []apiserverconfigv1.KMSConfiguration,
 ) (
 	apiserver.ETCDEncryptionConfig,
 	error,
 ) {
 	config := apiserver.ETCDEncryptionConfig{
-		RotationPhase:         etcdEncryptionKeyRotationPhase,
-		EncryptWithCurrentKey: true,
-		ResourcesToEncrypt:    resourcesToEncrypt,
-		EncryptedResources:    encryptedResources,
+		RotationPhase:              etcdEncryptionKeyRotationPhase,
+		EncryptWithCurrentKey:      true,
+		ExternalKMSProviderConfigs: externalKMSProviderConfigs,
+		ResourcesToEncrypt:         resourcesToEncrypt,
+		EncryptedResources:         encryptedResources,
 	}
 
 	if etcdEncryptionKeyRotationPhase == gardencorev1beta1.RotationPreparing {

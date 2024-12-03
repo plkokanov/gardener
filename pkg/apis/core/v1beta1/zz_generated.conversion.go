@@ -3477,6 +3477,8 @@ func Convert_core_ETCDEncryptionKeyRotation_To_v1beta1_ETCDEncryptionKeyRotation
 
 func autoConvert_v1beta1_EncryptionConfig_To_core_EncryptionConfig(in *EncryptionConfig, out *core.EncryptionConfig, s conversion.Scope) error {
 	out.Resources = *(*[]string)(unsafe.Pointer(&in.Resources))
+	out.ProviderConfig = (*runtime.RawExtension)(unsafe.Pointer(in.ProviderConfig))
+	out.Type = in.Type
 	return nil
 }
 
@@ -3487,6 +3489,8 @@ func Convert_v1beta1_EncryptionConfig_To_core_EncryptionConfig(in *EncryptionCon
 
 func autoConvert_core_EncryptionConfig_To_v1beta1_EncryptionConfig(in *core.EncryptionConfig, out *EncryptionConfig, s conversion.Scope) error {
 	out.Resources = *(*[]string)(unsafe.Pointer(&in.Resources))
+	out.ProviderConfig = (*runtime.RawExtension)(unsafe.Pointer(in.ProviderConfig))
+	out.Type = in.Type
 	return nil
 }
 

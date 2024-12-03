@@ -7,6 +7,7 @@ package apiserver
 import (
 	"github.com/Masterminds/semver/v3"
 	corev1 "k8s.io/api/core/v1"
+	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/component"
@@ -100,6 +101,8 @@ type ETCDEncryptionConfig struct {
 	// false and if there are two keys then the old key will be used for encryption while the current/new key will only
 	// be used for decryption.
 	EncryptWithCurrentKey bool
+	// ExternalProviderConfigs specifies configurations provided for an external encryption provider.
+	ExternalKMSProviderConfigs []apiserverconfigv1.KMSConfiguration
 	// ResourcesToEncrypt are the resources which should be encrypted.
 	ResourcesToEncrypt []string
 	// EncryptedResources are the resources which are currently encrypted.

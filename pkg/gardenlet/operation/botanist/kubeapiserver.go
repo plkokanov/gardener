@@ -227,6 +227,7 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context, enableNodeAgentAutho
 		b.Shoot.ResourcesToEncrypt,
 		b.Shoot.EncryptedResources,
 		v1beta1helper.GetShootETCDEncryptionKeyRotationPhase(b.Shoot.GetInfo().Status.Credentials),
+		b.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations(),
 		b.Shoot.HibernationEnabled,
 	); err != nil {
 		return err
