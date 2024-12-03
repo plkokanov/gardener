@@ -58,6 +58,7 @@ var SupportedExtensionKinds = sets.New(
 	extensionsv1alpha1.NetworkResource,
 	extensionsv1alpha1.OperatingSystemConfigResource,
 	extensionsv1alpha1.WorkerResource,
+	extensionsv1alpha1.ControlPlaneEncryptionResource,
 )
 
 // ValidateControllerRegistrationSpec validates the specification of a ControllerRegistration object.

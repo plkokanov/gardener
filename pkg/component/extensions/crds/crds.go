@@ -27,6 +27,8 @@ var (
 	containerRuntimeCRD string
 	//go:embed assets/crd-extensions.gardener.cloud_controlplanes.yaml
 	controlPlaneCRD string
+	//go:embed assets/crd-extensions.gardener.cloud_controlplaneencryptions.yaml
+	controlPlaneEncryptionCRD string
 	//go:embed assets/crd-extensions.gardener.cloud_dnsrecords.yaml
 	dnsRecordCRD string
 	//go:embed assets/crd-extensions.gardener.cloud_extensions.yaml
