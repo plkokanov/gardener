@@ -1,1 +1,3 @@
 patch-controllerdeployment-prow.yaml
+patch-imagevector-overwrite-kms-plugin-provider-local.yaml
+patch-imagevector-overwrite-machine-controller-manager-provider-local.yaml

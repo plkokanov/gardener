@@ -815,12 +815,20 @@ build:
         ldflags:
           - '{{.LD_FLAGS}}'
         main: ./cmd/gardener-extension-provider-local
-    - image: local-skaffold/gardener-extension-provider-local-kms-plugin
-      custom:
-        buildCommand: |
-          docker buildx build -t $IMAGE --push=$PUSH_IMAGE -f https://raw.githubusercontent.com/kubernetes/kms/refs/heads/master/internal/plugins/_mock/Dockerfile https://github.com/kubernetes/kubernetes.git#master:staging/src/k8s.io 
+    - image: local-skaffold/kms-plugin-provider-local
+      ko:
         dependencies:
-          paths: []
+          paths:
+            - cmd/kms-plugin-provider-local
+        main: ./cmd/kms-plugin-provider-local
+        ldflags:
+          - '{{.LD_FLAGS}}'
+      hooks:
+        after:
+          - command:
+              - bash
+              - hack/generate-kustomize-patch-controllerdeployment-provider-local.sh
+              - kms-plugin-provider-local
     - image: local-skaffold/gardener-extension-provider-local-node
       context: pkg/provider-local/node
       docker: {}
@@ -836,6 +844,12 @@ build:
         ldflags:
           - '{{.LD_FLAGS}}'
         main: ./cmd/machine-controller-manager-provider-local
+      hooks:
+        after:
+          - command:
+              - bash
+              - hack/generate-kustomize-patch-controllerdeployment-provider-local.sh
+              - machine-controller-manager-provider-local
     - image: local-skaffold/gardener-extension-provider-local/charts/extension
       custom:
         buildCommand: |

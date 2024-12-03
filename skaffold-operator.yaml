@@ -1238,6 +1238,12 @@ build:
           - '{{.LD_FLAGS}}'
         main: ./cmd/gardener-extension-admission-local
     - image: local-skaffold/machine-controller-manager-provider-local
+      hooks:
+        after:
+          - command:
+              - bash
+              - hack/generate-kustomize-patch-extension-provider-local.sh
+              - machine-controller-manager-provider-local
       ko:
         dependencies:
           paths:

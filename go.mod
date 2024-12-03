@@ -88,6 +88,11 @@ require (
 
 require (
 	cel.dev/expr v0.19.0 // indirect
+	github.com/go-faster/xor v1.0.0
+	k8s.io/kms v0.31.3
+)
+
+require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect

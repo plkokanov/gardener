@@ -7,3 +7,5 @@ resources:
 
 patches:
 - path: patch-controllerdeployment-prow.yaml
+- path: patch-imagevector-overwrite-machine-controller-manager-provider-local.yaml
+- path: patch-imagevector-overwrite-kms-plugin-provider-local.yaml
