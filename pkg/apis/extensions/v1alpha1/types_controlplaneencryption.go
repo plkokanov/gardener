@@ -28,9 +28,25 @@ type ControlPlaneEncryption struct {
 	Status ControlPlaneEncryptionStatus `json:"status"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ControlPlaneEncryptionList is a list of ControlPlaneEncryption resources.
+type ControlPlaneEncryptionList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	// Items is the list of ControlPlaneEncryption.
+	Items []ControlPlaneEncryption `json:"items"`
+}
+
 // GetExtensionSpec implements Object.
 func (i *ControlPlaneEncryption) GetExtensionSpec() Spec {
 	return &i.Spec
+}
+
+// GetExtensionStatus implements Object.
+func (i *ControlPlaneEncryption) GetExtensionStatus() Status {
+	return &i.Status
 }
 
 // ControlPlaneEncryptionSpec is the spec for a ControlPlaneEncryption resource.
