@@ -30,7 +30,7 @@ spec:
     kubeAPIServer:
       encryptionConfig:
         providerConfig:
-          keyid: "foo"
+          keyid: "foobar"
         type: "local"
     kubelet:
       seccompDefault: true

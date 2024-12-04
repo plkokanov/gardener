@@ -6,12 +6,18 @@ package main
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"flag"
+	"fmt"
+	"io"
 	"log"
 	"time"
 
-	"github.com/go-faster/xor"
 	kmsservice "k8s.io/kms/pkg/service"
+
+	"github.com/gardener/gardener/pkg/utils"
 )
 
 var (
@@ -24,8 +30,12 @@ func main() {
 	if *key == "" {
 		log.Fatal("key must not be empty")
 	}
+
+	sha256Key := utils.SHA256([]byte(*key))
+
 	grpcSvc := kmsservice.NewGRPCService(*addr, time.Second*5, svc{
-		key: *key,
+		keyID: *key,
+		key:   sha256Key,
 	})
 	log.Printf("serving on %s", *addr)
 	if err := grpcSvc.ListenAndServe(); err != nil {
@@ -34,23 +44,30 @@ func main() {
 }
 
 type svc struct {
-	key string
+	keyID string
+	key   []byte
 }
 
 // Decrypt implements service.Service.
-func (s svc) Decrypt(_ context.Context, _ string, req *kmsservice.DecryptRequest) ([]byte, error) {
-	if req.KeyID != s.key {
+func (s svc) Decrypt(_ context.Context, uid string, req *kmsservice.DecryptRequest) ([]byte, error) {
+	log.Printf("Got decrypt request with uid %s and key %s, expected key %s", uid, req.KeyID, s.key)
+	if req.KeyID != s.keyID {
 		return nil, nil
 	}
-	return decrypt([]byte(s.key), req.Ciphertext), nil
+	return decrypt(s.key, req.Ciphertext)
 }
 
 // Encrypt implements service.Service.
-func (s svc) Encrypt(_ context.Context, _ string, data []byte) (*kmsservice.EncryptResponse, error) {
-	ciphertext := encrypt([]byte(s.key), data)
+func (s svc) Encrypt(_ context.Context, uid string, data []byte) (*kmsservice.EncryptResponse, error) {
+	log.Printf("Returning encrypt request with key %s and uid %s", s.key, uid)
+	ciphertext, err := encrypt(s.key, data)
+	if err != nil {
+		return nil, err
+	}
+
 	return &kmsservice.EncryptResponse{
 		Ciphertext: ciphertext,
-		KeyID:      s.key,
+		KeyID:      s.keyID,
 	}, nil
 }
 
@@ -59,18 +76,43 @@ func (s svc) Status(_ context.Context) (*kmsservice.StatusResponse, error) {
 	return &kmsservice.StatusResponse{
 		Version: "v2",
 		Healthz: "ok",
-		KeyID:   s.key,
+		KeyID:   s.keyID,
 	}, nil
 }
 
-func encrypt(key, plain []byte) []byte {
-	cipher := make([]byte, len(plain))
-	xor.Bytes(cipher, plain, key)
-	return cipher
+func encrypt(key, plain []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := make([]byte, aes.BlockSize+len(plain))
+	iv := ciphertext[:aes.BlockSize]
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, err
+	}
+
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(ciphertext[aes.BlockSize:], plain)
+
+	return ciphertext, nil
 }
 
-func decrypt(key, cipher []byte) []byte {
-	plain := make([]byte, len(cipher))
-	xor.Bytes(plain, cipher, key)
-	return plain
+func decrypt(key, ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ciphertext) < aes.BlockSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	iv := ciphertext[:aes.BlockSize]
+	ciphertext = ciphertext[aes.BlockSize:]
+
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(ciphertext, ciphertext)
+
+	return ciphertext, nil
 }
