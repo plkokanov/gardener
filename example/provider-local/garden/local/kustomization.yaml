@@ -8,4 +8,14 @@ resources:
 patches:
 - path: patch-controllerdeployment-prow.yaml
 - path: patch-imagevector-overwrite-machine-controller-manager-provider-local.yaml
+  target:     
+    version: v1
+    group: core.gardener.cloud
+    kind: ControllerDeployment
+    name: provider-local
 - path: patch-imagevector-overwrite-kms-plugin-provider-local.yaml
+  target:     
+    version: v1
+    group: core.gardener.cloud
+    kind: ControllerDeployment
+    name: provider-local

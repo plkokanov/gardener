@@ -8,5 +8,5 @@ metadata:
 {{ include "labels" . | indent 4 }}
 data:
   images_overwrite.yaml: |
-{{ toYaml .Values.imageVectorOverwrite | indent 4 }}
+{{ .Values.imageVectorOverwrite | toYaml | indent 4 }}
 {{- end }}

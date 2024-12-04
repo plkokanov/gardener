@@ -10,15 +10,10 @@ repository=$(echo $SKAFFOLD_IMAGE | rev | cut -d':' -f 2- | rev)
 tag=$(echo $SKAFFOLD_IMAGE | rev | cut -d':' -f 1 | rev)
 
 cat <<EOF >example/provider-local/garden/local/patch-imagevector-overwrite-${image}.yaml
-apiVersion: core.gardener.cloud/v1
-kind: ControllerDeployment
-metadata:
-  name: provider-local
-helm:
-  values:
-    imageVectorOverwrite: |
-      images:
-      - name: ${image}
-        repository: ${repository}
-        tag: ${tag}
+- op: add
+  path: /helm/values/imageVectorOverwrite/images/-
+  value: 
+    name: ${image}
+    repository: ${repository}
+    tag: ${tag}
 EOF
