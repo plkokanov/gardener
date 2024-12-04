@@ -108,7 +108,7 @@ func Convert_local_CloudProfileConfig_To_v1alpha1_CloudProfileConfig(in *local.C
 }
 
 func autoConvert_v1alpha1_ControlPlaneEncryptionConfig_To_local_ControlPlaneEncryptionConfig(in *ControlPlaneEncryptionConfig, out *local.ControlPlaneEncryptionConfig, s conversion.Scope) error {
-	out.KeyType = (*local.KeyType)(unsafe.Pointer(in.KeyType))
+	out.Key = in.Key
 	return nil
 }
 
@@ -118,7 +118,7 @@ func Convert_v1alpha1_ControlPlaneEncryptionConfig_To_local_ControlPlaneEncrypti
 }
 
 func autoConvert_local_ControlPlaneEncryptionConfig_To_v1alpha1_ControlPlaneEncryptionConfig(in *local.ControlPlaneEncryptionConfig, out *ControlPlaneEncryptionConfig, s conversion.Scope) error {
-	out.KeyType = (*KeyType)(unsafe.Pointer(in.KeyType))
+	out.Key = in.Key
 	return nil
 }
 

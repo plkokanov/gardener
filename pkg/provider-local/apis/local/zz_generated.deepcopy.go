@@ -49,11 +49,6 @@ func (in *CloudProfileConfig) DeepCopyObject() runtime.Object {
 func (in *ControlPlaneEncryptionConfig) DeepCopyInto(out *ControlPlaneEncryptionConfig) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	if in.KeyType != nil {
-		in, out := &in.KeyType, &out.KeyType
-		*out = new(KeyType)
-		**out = **in
-	}
 	return
 }
 
