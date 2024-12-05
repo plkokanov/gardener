@@ -45,8 +45,11 @@ type ensurer struct {
 
 func (e *ensurer) EnsureKubeApiserverDeployment(_ context.Context, controlPlaneEncryption *extensionsv1alpha1.ControlPlaneEncryption, new *appsv1.Deployment) error {
 	cpeConfigs, err := e.decodeControlplaneEncryptionConfigs(controlPlaneEncryption)
+	if err != nil {
+		return err
+	}
 
-	image, err := imagevector.ImageVector().FindImage(imagevector.ImageNameKMSPluginProviderLocal)
+	image, err := imagevector.ImageVector().FindImage(imagevector.ImageNameKmsPluginProviderLocal)
 	if err != nil {
 		return err
 	}
