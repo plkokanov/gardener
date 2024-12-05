@@ -78,10 +78,80 @@ func ReconcileSecretETCDEncryptionConfiguration(
 		if err != nil {
 			return err
 		}
+		// we are in the phase of migrating  from kms provider to local provider
+		// kubeapiserver rotation has not yet been completed
+	case len(config.ExternalKMSProviderConfigs) == 1 && config.CurrentEncryptionProvider == gardencorev1beta1.ExternalETCDEncryptionKeyType && config.EncryptWithCurrentKey == false && config.RotationPhase == gardencorev1beta1.RotationPreparing:
+		options := []secretsmanager.GenerateOption{
+			secretsmanager.Persist(),
+			secretsmanager.Rotate(secretsmanager.KeepOld),
+		}
+		newKeySecret, err := secretsManager.Generate(ctx, &secretsutils.ETCDEncryptionKeySecretConfig{
+			Name:         secretNameETCDEncryptionKey,
+			SecretLength: 32,
+		}, options...)
+		if err != nil {
+			return err
+		}
+		encryptionKey := aesKeyFromSecretData(newKeySecret.Data)
+		encryptionConfiguration = &apiserverconfigv1.EncryptionConfiguration{
+			Resources: []apiserverconfigv1.ResourceConfiguration{
+				{
+					Resources: config.ResourcesToEncrypt,
+					Providers: []apiserverconfigv1.ProviderConfiguration{
+						{
+							KMS: &config.ExternalKMSProviderConfigs[0],
+						},
+						{
+							AESCBC: &apiserverconfigv1.AESConfiguration{
+								Keys: []apiserverconfigv1.Key{encryptionKey},
+							},
+						},
 
+						{
+							Identity: &apiserverconfigv1.IdentityConfiguration{},
+						},
+					},
+				},
+			},
+		}
+		// we are in the phase of migrating from kms provider to local provider
+		// kubeapiserver rotation has been completed
+	case len(config.ExternalKMSProviderConfigs) == 1 && config.CurrentEncryptionProvider == gardencorev1beta1.ExternalETCDEncryptionKeyType && config.EncryptWithCurrentKey == true && config.RotationPhase == gardencorev1beta1.RotationPreparing:
+		options := []secretsmanager.GenerateOption{
+			secretsmanager.Persist(),
+			secretsmanager.Rotate(secretsmanager.KeepOld),
+		}
+		newKeySecret, err := secretsManager.Generate(ctx, &secretsutils.ETCDEncryptionKeySecretConfig{
+			Name:         secretNameETCDEncryptionKey,
+			SecretLength: 32,
+		}, options...)
+		if err != nil {
+			return err
+		}
+		encryptionKey := aesKeyFromSecretData(newKeySecret.Data)
+		encryptionConfiguration = &apiserverconfigv1.EncryptionConfiguration{
+			Resources: []apiserverconfigv1.ResourceConfiguration{
+				{
+					Resources: config.ResourcesToEncrypt,
+					Providers: []apiserverconfigv1.ProviderConfiguration{
+						{
+							AESCBC: &apiserverconfigv1.AESConfiguration{
+								Keys: []apiserverconfigv1.Key{encryptionKey},
+							},
+						},
+						{
+							KMS: &config.ExternalKMSProviderConfigs[0],
+						},
+						{
+							Identity: &apiserverconfigv1.IdentityConfiguration{},
+						},
+					},
+				},
+			},
+		}
 		// we are in the phase of migrating from local provider to kms provider
 		// kubeapiserver rotation has not yet been completed
-	case len(config.ExternalKMSProviderConfigs) == 1 && config.EncryptWithCurrentKey == false && config.RotationPhase == gardencorev1beta1.RotationPreparing:
+	case len(config.ExternalKMSProviderConfigs) == 1 && config.CurrentEncryptionProvider == gardencorev1beta1.GardenerETCDEncryptionKeyType && config.EncryptWithCurrentKey == false && config.RotationPhase == gardencorev1beta1.RotationPreparing:
 		options := []secretsmanager.GenerateOption{
 			secretsmanager.Persist(),
 			secretsmanager.Rotate(secretsmanager.KeepOld),

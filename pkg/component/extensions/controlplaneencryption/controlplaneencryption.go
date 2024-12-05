@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
@@ -27,7 +30,9 @@ var TimeNow = time.Now
 // Interface is the interface for the ControlPlaneEncryption.
 type Interface interface {
 	component.DeployWaiter
-	KubeAPIServerKMSEncryptionConfigurations() []apiserverconfigv1.KMSConfiguration
+	KubeAPIServerKMSEncryptionConfigurations(context.Context) ([]apiserverconfigv1.KMSConfiguration, error)
+	ActiveKubeAPIServerKMSEncryptionConfiguration(context.Context) (*apiserverconfigv1.KMSConfiguration, error)
+	RemoveFinalizer(context.Context) error
 }
 
 // Values are the values fr the ControlPlaneEncryption.
@@ -77,7 +82,6 @@ type controlPlaneEncryption struct {
 	waitTimeout         time.Duration
 
 	controlPlaneEncryption *extensionsv1alpha1.ControlPlaneEncryption
-	kmsConfigurations      []apiserverconfigv1.KMSConfiguration
 }
 
 func (c *controlPlaneEncryption) Deploy(ctx context.Context) error {
@@ -91,6 +95,8 @@ func (c *controlPlaneEncryption) Deploy(ctx context.Context) error {
 	_, err := controllerutils.GetAndCreateOrMergePatch(ctx, c.client, c.controlPlaneEncryption, func() error {
 		metav1.SetMetaDataAnnotation(&c.controlPlaneEncryption.ObjectMeta, v1beta1constants.GardenerOperation, v1beta1constants.GardenerOperationReconcile)
 		metav1.SetMetaDataAnnotation(&c.controlPlaneEncryption.ObjectMeta, v1beta1constants.GardenerTimestamp, TimeNow().UTC().Format(time.RFC3339Nano))
+		// finalizer for kms to local provider migration
+		controllerutil.AddFinalizer(c.controlPlaneEncryption, gardencorev1beta1.GardenerName)
 		c.controlPlaneEncryption.Spec = extensionsv1alpha1.ControlPlaneEncryptionSpec{
 			DefaultSpec: extensionsv1alpha1.DefaultSpec{
 				Type:           c.values.Type,
@@ -111,6 +117,10 @@ func (c *controlPlaneEncryption) Destroy(ctx context.Context) error {
 	)
 }
 
+func (c *controlPlaneEncryption) RemoveFinalizer(ctx context.Context) error {
+	return controllerutils.RemoveFinalizers(ctx, c.client, c.controlPlaneEncryption, gardencorev1beta1.GardenerName)
+}
+
 func (c *controlPlaneEncryption) Wait(ctx context.Context) error {
 	return extensions.WaitUntilExtensionObjectReady(
 		ctx,
@@ -121,10 +131,7 @@ func (c *controlPlaneEncryption) Wait(ctx context.Context) error {
 		c.waitInterval,
 		c.waitSevereThreshold,
 		c.waitTimeout,
-		func() error {
-			c.kmsConfigurations = c.controlPlaneEncryption.Status.APIServerKMSEncryptionConfigs
-			return nil
-		},
+		nil,
 	)
 }
 
@@ -140,6 +147,29 @@ func (c *controlPlaneEncryption) WaitCleanup(ctx context.Context) error {
 	)
 }
 
-func (c *controlPlaneEncryption) KubeAPIServerKMSEncryptionConfigurations() []apiserverconfigv1.KMSConfiguration {
-	return c.kmsConfigurations
+func (c *controlPlaneEncryption) KubeAPIServerKMSEncryptionConfigurations(ctx context.Context) ([]apiserverconfigv1.KMSConfiguration, error) {
+	if err := c.client.Get(ctx, client.ObjectKeyFromObject(c.controlPlaneEncryption), c.controlPlaneEncryption); err != nil {
+		if apierrors.IsNotFound(err) {
+			return []apiserverconfigv1.KMSConfiguration{}, nil
+		}
+		return nil, err
+	}
+	return c.controlPlaneEncryption.Status.APIServerKMSEncryptionConfigs, nil
+}
+
+// ActiveKubeAPIServerKMSEncryptionConfiguration returns the KMS Configuration for the kube-apiserver of the ControlPlaneEncryption that is not in deletion
+func (c *controlPlaneEncryption) ActiveKubeAPIServerKMSEncryptionConfiguration(ctx context.Context) (*apiserverconfigv1.KMSConfiguration, error) {
+	cpes := &extensionsv1alpha1.ControlPlaneEncryptionList{}
+	if err := c.client.List(ctx, cpes); err != nil {
+		return nil, err
+	}
+	var activeKMSConfig *apiserverconfigv1.KMSConfiguration
+	for _, cpe := range cpes.Items {
+		if cpe.DeletionTimestamp != nil {
+			continue
+		} else {
+			activeKMSConfig = &cpe.Status.APIServerKMSEncryptionConfigs[0]
+		}
+	}
+	return activeKMSConfig, nil
 }

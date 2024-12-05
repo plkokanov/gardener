@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	"k8s.io/client-go/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -28,8 +29,6 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
-
-	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 )
 
 // RewriteEncryptedDataAddLabel patches all encrypted data in all namespaces in the target clusters and adds a label
@@ -48,7 +47,7 @@ func RewriteEncryptedDataAddLabel(
 	resourcesToEncrypt []string,
 	encryptedResources []string,
 	defaultGVKs []schema.GroupVersionKind,
-	kmsConfigs []apiserverv1.KMSConfiguration,
+	kmsConfig *apiserverv1.KMSConfiguration,
 ) error {
 	// Check if we have to label the resources to rewrite the data.
 	meta := &metav1.PartialObjectMetadata{}
@@ -65,10 +64,9 @@ func RewriteEncryptedDataAddLabel(
 	if err != nil {
 		return err
 	}
-
 	var encryptionKeyName string
-	if len(kmsConfigs) != 0 {
-		encryptionKeyName = kmsConfigs[0].Name
+	if kmsConfig != nil {
+		encryptionKeyName = kmsConfig.Name
 	} else {
 		etcdEncryptionKeySecret, found := secretsManager.Get(v1beta1constants.SecretNameETCDEncryptionKey, secretsmanager.Current)
 		if !found {
@@ -76,7 +74,6 @@ func RewriteEncryptedDataAddLabel(
 		}
 		encryptionKeyName = etcdEncryptionKeySecret.Name
 	}
-
 	if err := rewriteEncryptedData(
 		ctx,
 		log,

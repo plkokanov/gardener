@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	apiserverv1beta1 "k8s.io/apiserver/pkg/apis/apiserver/v1beta1"
 	clientcmdlatest "k8s.io/client-go/tools/clientcmd/api/latest"
 	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
@@ -210,9 +209,9 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context, enableNodeAgentAutho
 		}
 	}
 
-	var kmsEncryptionConfigs []apiserverconfigv1.KMSConfiguration
-	if b.Shoot.Components.Extensions.ControlPlaneEncryption != nil {
-		kmsEncryptionConfigs = b.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations()
+	kmsEncryptionConfigs, err := b.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations(ctx)
+	if err != nil {
+		return err
 	}
 
 	if err := shared.DeployKubeAPIServer(
@@ -232,6 +231,7 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context, enableNodeAgentAutho
 		b.Shoot.EncryptedResources,
 		v1beta1helper.GetShootETCDEncryptionKeyRotationPhase(b.Shoot.GetInfo().Status.Credentials),
 		kmsEncryptionConfigs,
+		b.Shoot.GetInfo().Status.Credentials.ETCDEncryptionKey.Type,
 		b.Shoot.HibernationEnabled,
 	); err != nil {
 		return err

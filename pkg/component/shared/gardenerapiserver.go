@@ -130,6 +130,7 @@ func DeployGardenerAPIServer(
 		append(resourcesToEncrypt, sets.List(gardenerutils.DefaultGardenerResourcesForEncryption())...),
 		append(encryptedResources, sets.List(gardenerutils.DefaultGardenerResourcesForEncryption())...),
 		nil,
+		gardencorev1beta1.GardenerETCDEncryptionKeyType,
 	)
 	if err != nil {
 		return err

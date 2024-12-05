@@ -101,6 +101,8 @@ type ETCDEncryptionConfig struct {
 	// false and if there are two keys then the old key will be used for encryption while the current/new key will only
 	// be used for decryption.
 	EncryptWithCurrentKey bool
+	// CurrentEncryptionProvider specifies which encryption provider the shoot is currently using
+	CurrentEncryptionProvider gardencorev1beta1.ETCDEncryptionKeyType
 	// ExternalProviderConfigs specifies configurations provided for an external encryption provider.
 	ExternalKMSProviderConfigs []apiserverconfigv1.KMSConfiguration
 	// ResourcesToEncrypt are the resources which should be encrypted.

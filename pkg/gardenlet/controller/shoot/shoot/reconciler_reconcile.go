@@ -38,7 +38,6 @@ import (
 	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	retryutils "github.com/gardener/gardener/pkg/utils/retry"
-	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 )
 
 // runReconcileShootFlow reconciles the Shoot cluster.
@@ -316,6 +315,26 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			}),
 			SkipIf: !o.Shoot.UsesExternalEncryptionProvider,
 		})
+		deletingControlPlaneEncryption = g.Add(flow.Task{
+			Name: "Deleting shoot control plane encryption components",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Destroy(ctx)
+			}),
+			SkipIf: o.Shoot.UsesExternalEncryptionProvider,
+		})
+		removeFinalizerControlPlaneEncryption = g.Add(flow.Task{
+			Name: "Remove finalizer and wait for deletion of shoot control plane encryption components",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				err := botanist.Shoot.Components.Extensions.ControlPlaneEncryption.RemoveFinalizer(ctx)
+				if err != nil {
+					return err
+				}
+				return botanist.Shoot.Components.Extensions.ControlPlaneEncryption.WaitCleanup(ctx)
+			}).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			// Run if it doesnt use external encryption provider and we are in phase completing for etcd credential rotation
+			SkipIf:       o.Shoot.UsesExternalEncryptionProvider || v1beta1helper.GetShootETCDEncryptionKeyRotationPhase(o.Shoot.GetInfo().Status.Credentials) != gardencorev1beta1.RotationCompleting,
+			Dependencies: flow.NewTaskIDs(deletingControlPlaneEncryption),
+		})
 		waitUntilControlPlaneEncryptionReady = g.Add(flow.Task{
 			Name: "Waiting until shoot control plane encryption has been reconciled",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
@@ -336,6 +355,8 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 				waitUntilKubeAPIServerServiceIsReady,
 				waitUntilExtensionResourcesBeforeKAPIReady,
 				waitUntilControlPlaneEncryptionReady,
+				deletingControlPlaneEncryption,
+				removeFinalizerControlPlaneEncryption,
 			).InsertIf(!staticNodesCIDR, waitUntilInfrastructureReady),
 		})
 		waitUntilKubeAPIServerIsReady = g.Add(flow.Task{
@@ -490,15 +511,17 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 		rewriteResourcesAddLabel = g.Add(flow.Task{
 			Name: "Labeling resources after modification of encryption config or to encrypt them with new ETCD encryption key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				var kmsConfigs []apiserverv1.KMSConfiguration
-				if botanist.Shoot.Components.Extensions.ControlPlaneEncryption != nil {
-					kmsConfigs = botanist.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations()
+				kmsConfig, err := botanist.Shoot.Components.Extensions.ControlPlaneEncryption.ActiveKubeAPIServerKMSEncryptionConfiguration(ctx)
+				if err != nil {
+					return err
 				}
-				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, o.Logger, o.SeedClientSet.Client(), o.ShootClientSet, o.SecretsManager, o.Shoot.SeedNamespace, v1beta1constants.DeploymentNameKubeAPIServer, o.Shoot.ResourcesToEncrypt, o.Shoot.EncryptedResources, gardenerutils.DefaultGVKsForEncryption(), kmsConfigs)
+				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, o.Logger, o.SeedClientSet.Client(), o.ShootClientSet, o.SecretsManager, o.Shoot.SeedNamespace, v1beta1constants.DeploymentNameKubeAPIServer, o.Shoot.ResourcesToEncrypt, o.Shoot.EncryptedResources, gardenerutils.DefaultGVKsForEncryption(), kmsConfig)
 			}).RetryUntilTimeout(30*time.Second, 10*time.Minute),
 			SkipIf: v1beta1helper.GetShootETCDEncryptionKeyRotationPhase(o.Shoot.GetInfo().Status.Credentials) != gardencorev1beta1.RotationPreparing &&
 				apiequality.Semantic.DeepEqual(o.Shoot.ResourcesToEncrypt, o.Shoot.EncryptedResources),
-			Dependencies: flow.NewTaskIDs(initializeShootClients),
+			Dependencies: flow.NewTaskIDs(
+				initializeShootClients,
+				deletingControlPlaneEncryption),
 		})
 		snapshotETCD = g.Add(flow.Task{
 			Name: "Snapshotting ETCD after modification of encryption config or resources are re-encrypted with new ETCD encryption key",

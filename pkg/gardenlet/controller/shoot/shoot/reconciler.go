@@ -661,6 +661,15 @@ func (r *Reconciler) updateShootStatusOperationStart(
 					return poolNames.Has(rollout.Name)
 				})
 			})
+	// need to start rotation for etcdEncryptionKey
+	// if we change from gardener managed key provider to kms provider
+	// or go from kms provider managed key to gardener managed key
+	if v1beta1helper.SwitchedETCDEncryptionProvider(shoot) {
+		// TODO: since we automatically trigger rotation, we can't rely on the annotation.
+		// setting the rotation.LastInitiationTime to static time ensures that we won't generate a new AESCBC key everytime we reconcile
+		var lastETCDCRotationInitTime *metav1.Time
+		if shoot.Status.Credentials.Rotation != nil && shoot.Status.Credentials.Rotation.ETCDEncryptionKey != nil {
+			lastETCDCRotationInitTime = shoot.Status.Credentials.Rotation.ETCDEncryptionKey.LastInitiationTime
 		}
 	}
 
@@ -851,12 +860,7 @@ func (r *Reconciler) patchShootStatusOperationSuccess(
 		}
 	}
 
-	if shoot.Status.Credentials == nil {
-		shoot.Status.Credentials = &gardencorev1beta1.ShootCredentials{}
-	}
-
-	if shoot.Status.Credentials.ETCDEncryptionKey != nil && shoot.Status.Credentials.ETCDEncryptionKey.Type == gardencorev1beta1.GardenerETCDEncryptionKeyType &&
-		v1beta1helper.UsesExternalEncryptionProvider(shoot) {
+	if v1beta1helper.SwitchedETCDEncryptionProvider(shoot) {
 		v1beta1helper.MutateShootETCDEncryptionKeyRotation(shoot, func(rotation *gardencorev1beta1.ETCDEncryptionKeyRotation) {
 			rotation.Phase = gardencorev1beta1.RotationCompleting
 			rotation.LastInitiationFinishedTime = &now

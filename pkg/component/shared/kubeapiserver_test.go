@@ -409,7 +409,8 @@ var _ = Describe("KubeAPIServer", func() {
 							apiServerConfig.AdmissionPlugins = []gardencorev1beta1.AdmissionPlugin{
 								{
 									Name: "PodSecurity",
-									Config: &runtime.RawExtension{Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/v1
+									Config: &runtime.RawExtension{
+										Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/v1
 kind: PodSecurityConfiguration
 defaults:
   enforce: "privileged"
@@ -450,7 +451,8 @@ exemptions:
 							apiServerConfig.AdmissionPlugins = []gardencorev1beta1.AdmissionPlugin{
 								{
 									Name: "PodSecurity",
-									Config: &runtime.RawExtension{Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/v1beta1
+									Config: &runtime.RawExtension{
+										Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/v1beta1
 kind: PodSecurityConfiguration
 defaults:
   enforce: "privileged"
@@ -491,7 +493,8 @@ exemptions:
 							apiServerConfig.AdmissionPlugins = []gardencorev1beta1.AdmissionPlugin{
 								{
 									Name: "PodSecurity",
-									Config: &runtime.RawExtension{Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/v1alpha1
+									Config: &runtime.RawExtension{
+										Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/v1alpha1
 kind: PodSecurityConfiguration
 defaults:
   enforce: "privileged"
@@ -533,7 +536,8 @@ exemptions:
 						apiServerConfig.AdmissionPlugins = []gardencorev1beta1.AdmissionPlugin{
 							{
 								Name: "PodSecurity",
-								Config: &runtime.RawExtension{Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/foo
+								Config: &runtime.RawExtension{
+									Raw: []byte(`apiVersion: pod-security.admission.config.k8s.io/foo
 kind: PodSecurityConfiguration-bar
 defaults:
   enforce: "privileged"
@@ -857,10 +861,12 @@ authorizers:
 
 				Entry("KubeAPIServerConfig is nil",
 					nil,
-					[]kubeapiserver.AuthorizationWebhook{{
-						Name:                 "custom",
-						Kubeconfig:           []byte("bar"),
-						WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"}},
+					[]kubeapiserver.AuthorizationWebhook{
+						{
+							Name:                 "custom",
+							Kubeconfig:           []byte("bar"),
+							WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"},
+						},
 					},
 					Not(HaveOccurred()),
 				),
@@ -868,10 +874,12 @@ authorizers:
 					func() {
 						apiServerConfig = &gardencorev1beta1.KubeAPIServerConfig{}
 					},
-					[]kubeapiserver.AuthorizationWebhook{{
-						Name:                 "custom",
-						Kubeconfig:           []byte("bar"),
-						WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"}},
+					[]kubeapiserver.AuthorizationWebhook{
+						{
+							Name:                 "custom",
+							Kubeconfig:           []byte("bar"),
+							WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"},
+						},
 					},
 					Not(HaveOccurred()),
 				),
@@ -883,10 +891,12 @@ authorizers:
 							},
 						}
 					},
-					[]kubeapiserver.AuthorizationWebhook{{
-						Name:                 "custom",
-						Kubeconfig:           []byte("bar"),
-						WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"}},
+					[]kubeapiserver.AuthorizationWebhook{
+						{
+							Name:                 "custom",
+							Kubeconfig:           []byte("bar"),
+							WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"},
+						},
 					},
 					Not(HaveOccurred()),
 				),
@@ -910,10 +920,12 @@ authorizers:
 							},
 						}
 					},
-					[]kubeapiserver.AuthorizationWebhook{{
-						Name:                 "custom",
-						Kubeconfig:           []byte("bar"),
-						WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"}},
+					[]kubeapiserver.AuthorizationWebhook{
+						{
+							Name:                 "custom",
+							Kubeconfig:           []byte("bar"),
+							WebhookConfiguration: apiserverv1beta1.WebhookConfiguration{FailurePolicy: "Fail"},
+						},
 					},
 					Not(HaveOccurred()),
 				),
@@ -1233,7 +1245,7 @@ authorizers:
 			wantScaleDown = false
 		})
 
-		var apiServerResources = corev1.ResourceRequirements{
+		apiServerResources := corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("1"),
 				corev1.ResourceMemory: resource.MustParse("2"),
@@ -1249,7 +1261,8 @@ authorizers:
 				kubeAPIServer.EXPECT().GetValues().Return(kubeapiserver.Values{
 					Values: apiserver.Values{
 						Autoscaling: autoscalingConfig,
-					}},
+					},
+				},
 				)
 				kubeAPIServer.EXPECT().SetAutoscalingReplicas(gomock.Any())
 				if expectedResources != nil {
@@ -1266,7 +1279,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			},
 
 			Entry("nothing is set when deployment is not found",
@@ -1343,7 +1356,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			},
 
 			Entry("no change due to already set",
@@ -1419,7 +1432,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 
 				if finalizeTest != nil {
 					finalizeTest()
@@ -1533,7 +1546,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 
 			It("It should deploy KubeAPIServer with the default resources appended to the passed resources", func() {
@@ -1572,7 +1585,7 @@ authorizers:
 					"deployments.apps",
 				}
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, resourcesToEncrypt, encryptedResources, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, resourcesToEncrypt, encryptedResources, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 		})
 
@@ -1591,7 +1604,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 		})
 
@@ -1610,7 +1623,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 		})
 
@@ -1629,7 +1642,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(serviceAccountConfig)
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 		})
 
@@ -1648,7 +1661,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 		})
 
@@ -1667,7 +1680,7 @@ authorizers:
 				kubeAPIServer.EXPECT().SetServiceAccountConfig(gomock.Any())
 				kubeAPIServer.EXPECT().Deploy(ctx)
 
-				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, wantScaleDown)).To(Succeed())
+				Expect(DeployKubeAPIServer(ctx, runtimeClient, namespace, kubeAPIServer, serviceAccountConfig, serverCertificateConfig, sniConfig, externalHostname, externalServer, nodeNetworkCIDRs, serviceNetworkCIDRs, podNetworkCIDRs, nil, nil, etcdEncryptionKeyRotationPhase, nil, gardencorev1beta1.GardenerETCDEncryptionKeyType, wantScaleDown)).To(Succeed())
 			})
 		})
 	})

@@ -217,6 +217,7 @@ func DeployKubeAPIServer(
 	encryptedResources []string,
 	etcdEncryptionKeyRotationPhase gardencorev1beta1.CredentialsRotationPhase,
 	externalKMSProviderConfigs []apiserverconfigv1.KMSConfiguration,
+	currentEncryptionProvider gardencorev1beta1.ETCDEncryptionKeyType,
 	wantScaleDown bool,
 ) error {
 	var (
@@ -267,6 +268,7 @@ func DeployKubeAPIServer(
 		append(resourcesToEncrypt, sets.List(gardenerutils.DefaultResourcesForEncryption())...),
 		append(encryptedResources, sets.List(gardenerutils.DefaultResourcesForEncryption())...),
 		externalKMSProviderConfigs,
+		currentEncryptionProvider,
 	)
 	if err != nil {
 		return err
@@ -312,7 +314,7 @@ func computeKubeAPIServerImages(
 }
 
 func ensureKubeAPIServerAdmissionPluginConfig(plugins []gardencorev1beta1.AdmissionPlugin) ([]gardencorev1beta1.AdmissionPlugin, error) {
-	var index = -1
+	index := -1
 
 	for i, plugin := range plugins {
 		if plugin.Name == "PodSecurity" {

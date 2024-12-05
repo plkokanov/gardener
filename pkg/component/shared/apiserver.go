@@ -249,6 +249,7 @@ func computeAPIServerETCDEncryptionConfig(
 	resourcesToEncrypt []string,
 	encryptedResources []string,
 	externalKMSProviderConfigs []apiserverconfigv1.KMSConfiguration,
+	currentEncryptionProvider gardencorev1beta1.ETCDEncryptionKeyType,
 ) (
 	apiserver.ETCDEncryptionConfig,
 	error,
@@ -257,6 +258,7 @@ func computeAPIServerETCDEncryptionConfig(
 		RotationPhase:              etcdEncryptionKeyRotationPhase,
 		EncryptWithCurrentKey:      true,
 		ExternalKMSProviderConfigs: externalKMSProviderConfigs,
+		CurrentEncryptionProvider:  currentEncryptionProvider,
 		ResourcesToEncrypt:         resourcesToEncrypt,
 		EncryptedResources:         encryptedResources,
 	}
