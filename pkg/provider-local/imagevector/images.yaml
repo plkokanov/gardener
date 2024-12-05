@@ -11,3 +11,7 @@ images:
   sourceRepository: github.com/kubernetes-sigs/kind/tree/main/images/local-path-helper
   repository: gcr.io/k8s-staging-kind/local-path-helper
   tag: v20240213-749005b2
+- name: kms-plugin-provider-local
+  sourceRepository: github.com/gardener/gardener
+  repository: kms-plugin-provider-local
+  tag: v0.0.0

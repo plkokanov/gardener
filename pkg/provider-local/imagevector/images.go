@@ -7,12 +7,12 @@
 package imagevector
 
 const (
+	// ImageNameKmsPluginProviderLocal is a constant for an image in the image vector with name 'kms-plugin-provider-local'.
+	ImageNameKmsPluginProviderLocal = "kms-plugin-provider-local"
 	// ImageNameLocalPathHelper is a constant for an image in the image vector with name 'local-path-helper'.
 	ImageNameLocalPathHelper = "local-path-helper"
 	// ImageNameLocalPathProvisioner is a constant for an image in the image vector with name 'local-path-provisioner'.
 	ImageNameLocalPathProvisioner = "local-path-provisioner"
 	// ImageNameMachineControllerManagerProviderLocal is a constant for an image in the image vector with name 'machine-controller-manager-provider-local'.
 	ImageNameMachineControllerManagerProviderLocal = "machine-controller-manager-provider-local"
-	// ImageNameMachineControllerManagerProviderLocal is a constant for an image in the image vector with name 'machine-controller-manager-provider-local'.
-	ImageNameKMSPluginProviderLocal = "kms-plugin-provider-local"
 )

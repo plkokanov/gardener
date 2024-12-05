@@ -126,28 +126,17 @@ reconciliation is possible.</p>
 <tbody>
 <tr>
 <td>
-<code>KeyType</code></br>
+<code>key</code></br>
 <em>
-<a href="#local.provider.extensions.gardener.cloud/v1alpha1.KeyType">
-KeyType
-</a>
+string
 </em>
 </td>
 <td>
-<em>(Optional)</em>
-<p>KeyType</p>
+<p>Key is the key for the controlplane encryption</p>
 </td>
 </tr>
 </tbody>
 </table>
-<h3 id="local.provider.extensions.gardener.cloud/v1alpha1.KeyType">KeyType
-(<code>string</code> alias)</p></h3>
-<p>
-(<em>Appears on:</em>
-<a href="#local.provider.extensions.gardener.cloud/v1alpha1.ControlPlaneEncryptionConfig">ControlPlaneEncryptionConfig</a>)
-</p>
-<p>
-</p>
 <h3 id="local.provider.extensions.gardener.cloud/v1alpha1.MachineImage">MachineImage
 </h3>
 <p>

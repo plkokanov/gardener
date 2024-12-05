@@ -5192,6 +5192,14 @@ triggered.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="core.gardener.cloud/v1beta1.ETCDEncryptionKeyType">ETCDEncryptionKeyType
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.ETCDEncryptionKey">ETCDEncryptionKey</a>)
+</p>
+<p>
+</p>
 <h3 id="core.gardener.cloud/v1beta1.EncryptionConfig">EncryptionConfig
 </h3>
 <p>
@@ -12003,6 +12011,19 @@ ShootCredentialsRotation
 <td>
 <em>(Optional)</em>
 <p>Rotation contains information about the credential rotations.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>etcdEncryptionKey</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.ETCDEncryptionKey">
+ETCDEncryptionKey
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
