@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	apiserverv1beta1 "k8s.io/apiserver/pkg/apis/apiserver/v1beta1"
 	clientcmdlatest "k8s.io/client-go/tools/clientcmd/api/latest"
 	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
@@ -36,11 +37,9 @@ import (
 
 // DefaultKubeAPIServer returns a deployer for the kube-apiserver.
 func (b *Botanist) DefaultKubeAPIServer(ctx context.Context) (kubeapiserver.Interface, error) {
-	var (
-		vpnConfig = kubeapiserver.VPNConfig{
-			Enabled: false,
-		}
-	)
+	vpnConfig := kubeapiserver.VPNConfig{
+		Enabled: false,
+	}
 
 	if !b.Shoot.IsWorkerless {
 		vpnConfig.Enabled = true
@@ -211,6 +210,11 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context, enableNodeAgentAutho
 		}
 	}
 
+	var kmsEncryptionConfigs []apiserverconfigv1.KMSConfiguration
+	if b.Shoot.Components.Extensions.ControlPlaneEncryption != nil {
+		kmsEncryptionConfigs = b.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations()
+	}
+
 	if err := shared.DeployKubeAPIServer(
 		ctx,
 		b.SeedClientSet.Client(),
@@ -227,7 +231,7 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context, enableNodeAgentAutho
 		b.Shoot.ResourcesToEncrypt,
 		b.Shoot.EncryptedResources,
 		v1beta1helper.GetShootETCDEncryptionKeyRotationPhase(b.Shoot.GetInfo().Status.Credentials),
-		b.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations(),
+		kmsEncryptionConfigs,
 		b.Shoot.HibernationEnabled,
 	); err != nil {
 		return err

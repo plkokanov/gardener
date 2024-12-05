@@ -170,7 +170,7 @@ var _ = Describe("ETCD", func() {
 
 				defaultGVKs := []schema.GroupVersionKind{corev1.SchemeGroupVersion.WithKind("Secret")}
 
-				Expect(RewriteEncryptedDataAddLabel(ctx, logger, runtimeClient, fakeTargetInterface, fakeSecretsManager, kubeAPIServerNamespace, kubeAPIServerDeploymentName, resources, resources, defaultGVKs)).To(Succeed())
+				Expect(RewriteEncryptedDataAddLabel(ctx, logger, runtimeClient, fakeTargetInterface, fakeSecretsManager, kubeAPIServerNamespace, kubeAPIServerDeploymentName, resources, resources, defaultGVKs, nil)).To(Succeed())
 
 				for _, obj := range []client.Object{
 					secret1, secret2, secret3,
@@ -215,7 +215,7 @@ var _ = Describe("ETCD", func() {
 				metav1.SetMetaDataAnnotation(&kubeAPIServerDeployment.ObjectMeta, "credentials.gardener.cloud/resources-labeled", "true")
 				Expect(runtimeClient.Update(ctx, kubeAPIServerDeployment)).To(Succeed())
 
-				Expect(RewriteEncryptedDataAddLabel(ctx, logger, runtimeClient, fakeTargetInterface, fakeSecretsManager, kubeAPIServerNamespace, kubeAPIServerDeploymentName, resources, resources, defaultGVKs)).To(Succeed())
+				Expect(RewriteEncryptedDataAddLabel(ctx, logger, runtimeClient, fakeTargetInterface, fakeSecretsManager, kubeAPIServerNamespace, kubeAPIServerDeploymentName, resources, resources, defaultGVKs, nil)).To(Succeed())
 
 				Expect(secret1.ResourceVersion).To(Equal(secret1ResourceVersion))
 				Expect(secret2.ResourceVersion).To(Equal(secret2ResourceVersion))

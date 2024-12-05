@@ -28,6 +28,8 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
+
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 )
 
 // RewriteEncryptedDataAddLabel patches all encrypted data in all namespaces in the target clusters and adds a label
@@ -46,6 +48,7 @@ func RewriteEncryptedDataAddLabel(
 	resourcesToEncrypt []string,
 	encryptedResources []string,
 	defaultGVKs []schema.GroupVersionKind,
+	kmsConfigs []apiserverv1.KMSConfiguration,
 ) error {
 	// Check if we have to label the resources to rewrite the data.
 	meta := &metav1.PartialObjectMetadata{}
@@ -63,18 +66,24 @@ func RewriteEncryptedDataAddLabel(
 		return err
 	}
 
-	etcdEncryptionKeySecret, found := secretsManager.Get(v1beta1constants.SecretNameETCDEncryptionKey, secretsmanager.Current)
-	if !found {
-		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameETCDEncryptionKey)
+	var encryptionKeyName string
+	if len(kmsConfigs) != 0 {
+		encryptionKeyName = kmsConfigs[0].Name
+	} else {
+		etcdEncryptionKeySecret, found := secretsManager.Get(v1beta1constants.SecretNameETCDEncryptionKey, secretsmanager.Current)
+		if !found {
+			return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameETCDEncryptionKey)
+		}
+		encryptionKeyName = etcdEncryptionKeySecret.Name
 	}
 
 	if err := rewriteEncryptedData(
 		ctx,
 		log,
 		clientSet.Client(),
-		utils.MustNewRequirement(labelKeyRotationKeyName, selection.NotEquals, etcdEncryptionKeySecret.Name),
+		utils.MustNewRequirement(labelKeyRotationKeyName, selection.NotEquals, encryptionKeyName),
 		func(objectMeta *metav1.ObjectMeta) {
-			metav1.SetMetaDataLabel(objectMeta, labelKeyRotationKeyName, etcdEncryptionKeySecret.Name)
+			metav1.SetMetaDataLabel(objectMeta, labelKeyRotationKeyName, encryptionKeyName)
 		},
 		message+" (Add label)",
 		encryptedGVKs...,

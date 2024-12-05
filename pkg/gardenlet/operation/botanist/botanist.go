@@ -53,11 +53,15 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	o.Shoot.Components.Extensions.ExternalDNSRecord = b.DefaultExternalDNSRecord()
 	o.Shoot.Components.Extensions.InternalDNSRecord = b.DefaultInternalDNSRecord()
 	o.Shoot.Components.Extensions.IngressDNSRecord = b.DefaultIngressDNSRecord()
-	o.Shoot.Components.Extensions.ControlPlaneEncryption = b.DefaultControlPlaneEncryption()
 	o.Shoot.Components.Extensions.Extension, err = b.DefaultExtension(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	if o.Shoot.UsesExternalEncryptionProvider {
+		o.Shoot.Components.Extensions.ControlPlaneEncryption = b.DefaultControlPlaneEncryption()
+	}
+
 	if !o.Shoot.IsWorkerless {
 		o.Shoot.Components.Extensions.ContainerRuntime = b.DefaultContainerRuntime()
 		o.Shoot.Components.Extensions.ControlPlane = b.DefaultControlPlane(extensionsv1alpha1.Normal)

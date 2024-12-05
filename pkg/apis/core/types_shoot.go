@@ -194,6 +194,19 @@ type NetworkingStatus struct {
 type ShootCredentials struct {
 	// Rotation contains information about the credential rotations.
 	Rotation *ShootCredentialsRotation
+
+	ETCDEncryptionKey *ETCDEncryptionKey
+}
+
+type ETCDEncryptionKeyType string
+
+const (
+	GardenerETCDEncryptionKeyType ETCDEncryptionKeyType = "gardener"
+	ExternalETCDEncryptionKeyType ETCDEncryptionKeyType = "external"
+)
+
+type ETCDEncryptionKey struct {
+	Type ETCDEncryptionKeyType
 }
 
 // ShootCredentialsRotation contains information about the rotation of credentials.

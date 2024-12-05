@@ -52,7 +52,7 @@ func (a *actuator) Reconcile(ctx context.Context, _ logr.Logger, encryption *ext
 				Name:       fmt.Sprintf("kms-local-%s", providerName),
 				Endpoint: (&url.URL{
 					Scheme: "unix",
-					Path:   fmt.Sprintf("/var/run/kmsplugin/socket-%s.sock", providerName),
+					Path:   fmt.Sprintf("/var/run/kmsplugin-%s/socket.sock", providerName),
 				}).String(),
 			},
 		},

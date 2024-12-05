@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"path/filepath"
 
-	api "github.com/gardener/gardener/pkg/provider-local/apis/local"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,8 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/gardener/gardener/extensions/pkg/webhook"
 	"github.com/gardener/gardener/extensions/pkg/webhook/controlplaneencryption"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	api "github.com/gardener/gardener/pkg/provider-local/apis/local"
 	"github.com/gardener/gardener/pkg/provider-local/imagevector"
 )
 
@@ -50,36 +51,31 @@ func (e *ensurer) EnsureKubeApiserverDeployment(_ context.Context, controlPlaneE
 		return err
 	}
 
-	// TODO: Use gardener util functions to mutate the deployment e.g.:
-	// newObj.Spec.Template.Spec.Containers = webhook.EnsureContainerWithName(
-	// 	newObj.Spec.Template.Spec.Containers,
-	// 	machinecontrollermanager.ProviderSidecarContainer(newObj.Namespace, local.Name, image.String()),
-	// )
-	new.Spec.Template.Spec.Volumes = append(new.Spec.Template.Spec.Volumes,
-		corev1.Volume{
-			Name: kmsPluginVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-
 	for idx, cpeConfig := range cpeConfigs {
-		uri, err := url.Parse(controlPlaneEncryption.Status.APIServerKMSEncryptionConfigs[idx].Endpoint)
+		kmsEncryptionConfig := controlPlaneEncryption.Status.APIServerKMSEncryptionConfigs[idx]
+		uri, err := url.Parse(kmsEncryptionConfig.Endpoint)
 		if err != nil {
 			return err
 		}
 		path := filepath.Dir(uri.Path)
 
-		// TODO check ha case: find kube-api-sever idx
-		new.Spec.Template.Spec.Containers[0].VolumeMounts = append(new.Spec.Template.Spec.Containers[0].VolumeMounts,
-			corev1.VolumeMount{
-				Name:      kmsPluginVolumeName,
-				MountPath: path,
+		new.Spec.Template.Spec.Volumes = webhook.EnsureVolumeWithName(new.Spec.Template.Spec.Volumes,
+			corev1.Volume{
+				Name: kmsEncryptionConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
 			})
 
-		new.Spec.Template.Spec.InitContainers = append(new.Spec.Template.Spec.InitContainers,
+		// TODO check ha case: find kube-api-sever idx
+		new.Spec.Template.Spec.Containers[0].VolumeMounts = webhook.EnsureVolumeMountWithName(new.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      kmsEncryptionConfig.Name,
+			MountPath: path,
+		})
+
+		new.Spec.Template.Spec.InitContainers = webhook.EnsureContainerWithName(new.Spec.Template.Spec.InitContainers,
 			corev1.Container{
-				Name:            fmt.Sprintf("local-kms-plugin-%d", idx),
+				Name:            kmsEncryptionConfig.Name,
 				Image:           image.String(),
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				RestartPolicy:   ptr.To(corev1.ContainerRestartPolicyAlways),
@@ -88,7 +84,7 @@ func (e *ensurer) EnsureKubeApiserverDeployment(_ context.Context, controlPlaneE
 					"--key=" + cpeConfig.Key,
 				},
 				VolumeMounts: []corev1.VolumeMount{{
-					Name:      kmsPluginVolumeName,
+					Name:      kmsEncryptionConfig.Name,
 					MountPath: path,
 				}},
 			},

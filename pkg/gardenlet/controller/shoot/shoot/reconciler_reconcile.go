@@ -38,6 +38,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	retryutils "github.com/gardener/gardener/pkg/utils/retry"
+	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 )
 
 // runReconcileShootFlow reconciles the Shoot cluster.
@@ -309,13 +310,17 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			Dependencies: flow.NewTaskIDs(deployExtensionResourcesBeforeKAPI),
 		})
 		deployControlPlaneEncryption = g.Add(flow.Task{
-			Name:   "Deploying shoot control plane encryption components",
-			Fn:     flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Deploy),
+			Name: "Deploying shoot control plane encryption components",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Deploy(ctx)
+			}),
 			SkipIf: !o.Shoot.UsesExternalEncryptionProvider,
 		})
 		waitUntilControlPlaneEncryptionReady = g.Add(flow.Task{
-			Name:         "Waiting until shoot control plane encryption has been reconciled",
-			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Wait),
+			Name: "Waiting until shoot control plane encryption has been reconciled",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Wait(ctx)
+			}),
 			SkipIf:       !o.Shoot.UsesExternalEncryptionProvider,
 			Dependencies: flow.NewTaskIDs(deployControlPlaneEncryption),
 		})
@@ -485,7 +490,11 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 		rewriteResourcesAddLabel = g.Add(flow.Task{
 			Name: "Labeling resources after modification of encryption config or to encrypt them with new ETCD encryption key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, o.Logger, o.SeedClientSet.Client(), o.ShootClientSet, o.SecretsManager, o.Shoot.ControlPlaneNamespace, v1beta1constants.DeploymentNameKubeAPIServer, o.Shoot.ResourcesToEncrypt, o.Shoot.EncryptedResources, gardenerutils.DefaultGVKsForEncryption())
+				var kmsConfigs []apiserverv1.KMSConfiguration
+				if botanist.Shoot.Components.Extensions.ControlPlaneEncryption != nil {
+					kmsConfigs = botanist.Shoot.Components.Extensions.ControlPlaneEncryption.KubeAPIServerKMSEncryptionConfigurations()
+				}
+				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, o.Logger, o.SeedClientSet.Client(), o.ShootClientSet, o.SecretsManager, o.Shoot.SeedNamespace, v1beta1constants.DeploymentNameKubeAPIServer, o.Shoot.ResourcesToEncrypt, o.Shoot.EncryptedResources, gardenerutils.DefaultGVKsForEncryption(), kmsConfigs)
 			}).RetryUntilTimeout(30*time.Second, 10*time.Minute),
 			SkipIf: v1beta1helper.GetShootETCDEncryptionKeyRotationPhase(o.Shoot.GetInfo().Status.Credentials) != gardencorev1beta1.RotationPreparing &&
 				apiequality.Semantic.DeepEqual(o.Shoot.ResourcesToEncrypt, o.Shoot.EncryptedResources),

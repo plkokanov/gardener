@@ -734,13 +734,19 @@ func (r *Reconciler) runDeleteShootFlow(ctx context.Context, o *operation.Operat
 			Dependencies: flow.NewTaskIDs(syncPoint, destroyEtcd),
 		})
 		destroyControlPlaneEncryption = g.Add(flow.Task{
-			Name:         "Destroying control plane encryption",
-			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Destroy).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Name: "Destroying control plane encryption",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.Extensions.ControlPlaneEncryption.Destroy(ctx)
+			}).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			SkipIf:       !botanist.Shoot.UsesExternalEncryptionProvider,
 			Dependencies: flow.NewTaskIDs(waitUntilEtcdDeleted),
 		})
 		waitUntilControlPlaneEncryptionDeleted = g.Add(flow.Task{
-			Name:         "Waiting until control plane encryption has been destroyed",
-			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.ControlPlaneEncryption.WaitCleanup).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Name: "Waiting until control plane encryption has been destroyed",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.Extensions.ControlPlaneEncryption.WaitCleanup(ctx)
+			}).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			SkipIf:       !botanist.Shoot.UsesExternalEncryptionProvider,
 			Dependencies: flow.NewTaskIDs(destroyControlPlaneEncryption),
 		})
 		deleteNamespace = g.Add(flow.Task{

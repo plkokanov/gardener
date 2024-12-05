@@ -851,6 +851,30 @@ func (r *Reconciler) patchShootStatusOperationSuccess(
 		}
 	}
 
+	if shoot.Status.Credentials == nil {
+		shoot.Status.Credentials = &gardencorev1beta1.ShootCredentials{}
+	}
+
+	if shoot.Status.Credentials.ETCDEncryptionKey != nil && shoot.Status.Credentials.ETCDEncryptionKey.Type == gardencorev1beta1.GardenerETCDEncryptionKeyType &&
+		v1beta1helper.UsesExternalEncryptionProvider(shoot) {
+		v1beta1helper.MutateShootETCDEncryptionKeyRotation(shoot, func(rotation *gardencorev1beta1.ETCDEncryptionKeyRotation) {
+			rotation.Phase = gardencorev1beta1.RotationCompleting
+			rotation.LastInitiationFinishedTime = &now
+		})
+	}
+
+	var etcdEncryptionKey *gardencorev1beta1.ETCDEncryptionKey
+	if v1beta1helper.UsesExternalEncryptionProvider(shoot) {
+		etcdEncryptionKey = &gardencorev1beta1.ETCDEncryptionKey{
+			Type: gardencorev1beta1.ExternalETCDEncryptionKeyType,
+		}
+	} else {
+		etcdEncryptionKey = &gardencorev1beta1.ETCDEncryptionKey{
+			Type: gardencorev1beta1.GardenerETCDEncryptionKeyType,
+		}
+	}
+	shoot.Status.Credentials.ETCDEncryptionKey = etcdEncryptionKey
+
 	return r.GardenClient.Status().Patch(ctx, shoot, patch)
 }
 

@@ -231,8 +231,15 @@ func (shootStatusStrategy) PrepareForUpdate(_ context.Context, obj, old runtime.
 	oldShoot := old.(*core.Shoot)
 	newShoot.Spec = oldShoot.Spec
 
+	newCreds, oldCreds := newShoot.Status.Credentials, oldShoot.Status.Credentials
+
 	if lastOperation := newShoot.Status.LastOperation; lastOperation != nil && lastOperation.Type == core.LastOperationTypeMigrate &&
 		(lastOperation.State == core.LastOperationStateSucceeded || lastOperation.State == core.LastOperationStateAborted) {
+		newShoot.Generation = oldShoot.Generation + 1
+	} else if (newCreds != nil && oldCreds != nil) &&
+		(newCreds.ETCDEncryptionKey != nil && oldCreds.ETCDEncryptionKey != nil) &&
+		newCreds.ETCDEncryptionKey.Type != oldCreds.ETCDEncryptionKey.Type {
+		// TODO: figure out KMS to KMS
 		newShoot.Generation = oldShoot.Generation + 1
 	}
 }

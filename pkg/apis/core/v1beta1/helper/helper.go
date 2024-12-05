@@ -1624,5 +1624,7 @@ func sumQuantities(left, right *resource.Quantity) *resource.Quantity {
 
 // UsesExternalEncryptionProvider checks if the shoot uses external provider to encrypt resources at rest.
 func UsesExternalEncryptionProvider(shoot *gardencorev1beta1.Shoot) bool {
-	return shoot.Spec.Kubernetes.KubeAPIServer.EncryptionConfig.ProviderConfig != nil
+	return shoot.Spec.Kubernetes.KubeAPIServer != nil &&
+		shoot.Spec.Kubernetes.KubeAPIServer.EncryptionConfig != nil &&
+		shoot.Spec.Kubernetes.KubeAPIServer.EncryptionConfig.ProviderConfig != nil
 }

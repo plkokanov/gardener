@@ -471,7 +471,7 @@ func (r *Reconciler) reconcile(
 		rewriteResourcesAddLabel = g.Add(flow.Task{
 			Name: "Labeling encrypted resources after modification of encryption config or to re-encrypt them with new ETCD encryption key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, log, r.RuntimeClientSet.Client(), virtualClusterClientSet, secretsManager, r.GardenNamespace, namePrefix+v1beta1constants.DeploymentNameKubeAPIServer, resourcesToEncrypt, encryptedResources, defaultEncryptedGVKs)
+				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, log, r.RuntimeClientSet.Client(), virtualClusterClientSet, secretsManager, r.GardenNamespace, namePrefix+v1beta1constants.DeploymentNameKubeAPIServer, resourcesToEncrypt, encryptedResources, defaultEncryptedGVKs, nil)
 			}).RetryUntilTimeout(30*time.Second, 10*time.Minute),
 			SkipIf: helper.GetETCDEncryptionKeyRotationPhase(garden.Status.Credentials) != gardencorev1beta1.RotationPreparing &&
 				apiequality.Semantic.DeepEqual(resourcesToEncrypt, encryptedResources),
@@ -916,14 +916,16 @@ func (r *Reconciler) deployOperatorServiceMonitor(ctx context.Context) error {
 	_, err := controllerutils.CreateOrGetAndMergePatch(ctx, r.RuntimeClientSet.Client(), sm, func() error {
 		sm.Labels = utils.MergeStringMaps(sm.Labels, monitoringutils.Labels(gardenprometheus.Label))
 
-		sm.Spec.Endpoints = []monitoringv1.Endpoint{{
-			Port: "metrics",
-			MetricRelabelConfigs: monitoringutils.StandardMetricRelabelConfig(
-				"rest_client_.+",
-				"controller_runtime_.+",
-				"workqueue_.+",
-				"go_.+",
-			)},
+		sm.Spec.Endpoints = []monitoringv1.Endpoint{
+			{
+				Port: "metrics",
+				MetricRelabelConfigs: monitoringutils.StandardMetricRelabelConfig(
+					"rest_client_.+",
+					"controller_runtime_.+",
+					"workqueue_.+",
+					"go_.+",
+				),
+			},
 		}
 		sm.Spec.Selector = metav1.LabelSelector{MatchLabels: map[string]string{
 			v1beta1constants.LabelApp:  v1beta1constants.LabelGardener,

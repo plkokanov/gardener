@@ -252,6 +252,20 @@ type ShootCredentials struct {
 	// Rotation contains information about the credential rotations.
 	// +optional
 	Rotation *ShootCredentialsRotation `json:"rotation,omitempty" protobuf:"bytes,1,opt,name=rotation"`
+
+	// +optional
+	ETCDEncryptionKey *ETCDEncryptionKey `json:"etcdEncryptionKey,omitempty" protobuf:"bytes,2,opt,name=etcdEncryptionKey"`
+}
+
+type ETCDEncryptionKeyType string
+
+const (
+	GardenerETCDEncryptionKeyType ETCDEncryptionKeyType = "gardener"
+	ExternalETCDEncryptionKeyType ETCDEncryptionKeyType = "external"
+)
+
+type ETCDEncryptionKey struct {
+	Type ETCDEncryptionKeyType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
 }
 
 // ShootCredentialsRotation contains information about the rotation of credentials.

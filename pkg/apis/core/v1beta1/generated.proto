@@ -897,6 +897,10 @@ message ETCDConfig {
   optional ControlPlaneAutoscaling autoscaling = 1;
 }
 
+message ETCDEncryptionKey {
+  optional string type = 1;
+}
+
 // ETCDEncryptionKeyRotation contains information about the ETCD encryption key credential rotation.
 message ETCDEncryptionKeyRotation {
   // Phase describes the phase of the ETCD encryption key credential rotation.
@@ -2972,6 +2976,9 @@ message ShootCredentials {
   // Rotation contains information about the credential rotations.
   // +optional
   optional ShootCredentialsRotation rotation = 1;
+
+  // +optional
+  optional ETCDEncryptionKey etcdEncryptionKey = 2;
 }
 
 // ShootCredentialsRotation contains information about the rotation of credentials.
