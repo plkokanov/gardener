@@ -50,7 +50,7 @@ type svc struct {
 
 // Decrypt implements service.Service.
 func (s svc) Decrypt(_ context.Context, uid string, req *kmsservice.DecryptRequest) ([]byte, error) {
-	log.Printf("Got decrypt request with uid %s and key %s, expected key %s", uid, req.KeyID, s.key)
+	log.Printf("Got decrypt request with uid %s and keyid %s, expected keyid %s", uid, req.KeyID, s.keyID)
 	if req.KeyID != s.keyID {
 		return nil, nil
 	}
@@ -59,7 +59,7 @@ func (s svc) Decrypt(_ context.Context, uid string, req *kmsservice.DecryptReque
 
 // Encrypt implements service.Service.
 func (s svc) Encrypt(_ context.Context, uid string, data []byte) (*kmsservice.EncryptResponse, error) {
-	log.Printf("Returning encrypt request with key %s and uid %s", s.key, uid)
+	log.Printf("Returning encrypt request with keyid %s and uid %s", s.keyID, uid)
 	ciphertext, err := encrypt(s.key, data)
 	if err != nil {
 		return nil, err
