@@ -85,6 +85,15 @@ const (
 	// owner: @Wieneo @timebertt
 	// alpha: v1.113.0
 	RemoveAPIServerProxyLegacyPort featuregate.Feature = "RemoveAPIServerProxyLegacyPort"
+
+	// VPARecommenderHistoryFromPrometheus enables the vpa-recommender to use historical data from prometheus
+	// instead of relying on checkpoints after restarts. If monitoring is disabled a special prometheus instance that
+	// only scrapes the CAdvisor for metrics will be created in the shoot's control plane namespace, seed garden namespace
+	// and garden runtime cluster's garden namespace. Those prometheus instances will be used to provide history to
+	// the corresponding vpa-recommenders running in the same namespaces.
+	// owner: @plkokanov @ialdzhikov @volezmo
+	// alpha: v1.114.0
+	VPARecommenderHistoryFromPrometheus featuregate.Feature = "VPARecommenderHistoryFromPrometheus"
 )
 
 // DefaultFeatureGate is the central feature gate map used by all gardener components.
@@ -122,6 +131,7 @@ var AllFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	CredentialsRotationWithoutWorkersRollout: {Default: false, PreRelease: featuregate.Alpha},
 	InPlaceNodeUpdates:                       {Default: false, PreRelease: featuregate.Alpha},
 	RemoveAPIServerProxyLegacyPort:           {Default: false, PreRelease: featuregate.Alpha},
+	VPARecommenderHistoryFromPrometheus:      {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // GetFeatures returns a feature gate map with the respective specifications. Non-existing feature gates are ignored.
