@@ -6,8 +6,10 @@ package vpa
 
 import (
 	"fmt"
+	"time"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +21,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
@@ -26,6 +29,7 @@ import (
 	"github.com/gardener/gardener/pkg/component"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -73,6 +77,91 @@ type ValuesRecommender struct {
 	PriorityClassName string
 	// Replicas is the number of pod replicas.
 	Replicas *int32
+	// Prometheus is a set of configuration values for the prometheus that is used as a storage provider for the vpa-recommender.
+	Prometheus ValuesPrometheus
+}
+
+// ValuesPrometheus is a set of configuration values for the prometheus that is used as a storage provider for the vpa-recommender.
+type ValuesPrometheus struct {
+	// Name is the name of the prometheus instance that will serve as the storage backend for the vpa recommender
+	Name string
+	// Image defines the container image of prometheus.
+	Image string
+	// Version is the version of prometheus.
+	Version string
+	// PriorityClassName is the name of the priority class for the deployment.
+	PriorityClassName string
+	// StorageCapacity is the storage capacity of Prometheus.
+	StorageCapacity resource.Quantity
+	// Retention is the duration for the data retention.
+	Retention *monitoringv1.Duration
+	// RetentionSize is the size for the data retention.
+	RetentionSize monitoringv1.ByteSize
+	// ScrapeTimeout is the timeout duration when scraping targets.
+	ScrapeTimeout monitoringv1.Duration
+	// VPAMinAllowed defines the resource list for the minAllowed field for the prometheus container resource policy.
+	VPAMinAllowed *corev1.ResourceList
+	// ExternalLabels is the set of external labels for the Prometheus configuration.
+	ExternalLabels map[string]string
+	// AdditionalPodLabels is a map containing additional labels for the created pods.
+	AdditionalPodLabels map[string]string
+	// CentralConfigs contains configuration for this Prometheus instance that is created together with it. This should
+	// only contain configuration that cannot be directly assigned to another component package.
+	CentralConfigs CentralConfigs
+	// RemoteWrite contains remote write configuration for this Prometheus instance.
+	RemoteWrite *RemoteWriteValues
+	// AdditionalResources contains any additional resources which get added to the ManagedResource.
+	AdditionalResources []client.Object
+	// Cortex contains configuration for the cortex frontend sidecar container.
+	Cortex *CortexValues
+	// ResourceRequests defines the initial resource requests.
+	ResourceRequests *corev1.ResourceList
+	// Repplicas is the number of replicas.
+	Replicas *int32
+}
+
+// CentralConfigs contains configuration for this Prometheus instance that is created together with it. This should
+// only contain configuration that cannot be directly assigned to another component package.
+type CentralConfigs struct {
+	// AdditionalScrapeConfigs are additional scrape configs which cannot be modelled with the CRDs of the Prometheus
+	// operator.
+	AdditionalScrapeConfigs []string
+	// PrometheusRules is a list of central PrometheusRule objects for this prometheus instance.
+	PrometheusRules []*monitoringv1.PrometheusRule
+	// ScrapeConfigs is a list of central ScrapeConfig objects for this prometheus instance.
+	ScrapeConfigs []*monitoringv1alpha1.ScrapeConfig
+	// ServiceMonitors is a list of central ServiceMonitor objects for this prometheus instance.
+	ServiceMonitors []*monitoringv1.ServiceMonitor
+	// PodMonitors is a list of central PodMonitor objects for this prometheus instance.
+	PodMonitors []*monitoringv1.PodMonitor
+}
+
+// RemoteWriteValues contains remote write configuration for this Prometheus instance.
+type RemoteWriteValues struct {
+	// URL is the remote url.
+	URL string
+	// KeptMetrics is a list of metrics to keep.
+	KeptMetrics []string
+	// GlobalShootRemoteWriteSecret is a secret containing basic auth credentials for the remote write endpoint.
+	GlobalShootRemoteWriteSecret *corev1.Secret
+}
+
+// TargetClusterValues contains configuration in case Prometheus scrapes metrics from another kube-apiserver (e.g.,
+// virtual garden, or shoot cluster) or other components running in this cluster.
+type TargetClusterValues struct {
+	// ServiceAccountName is the name of the ServiceAccount.
+	ServiceAccountName string
+	// ScrapesMetrics specifies whether this Prometheus has scrape configs for scraping metrics from components running
+	// in the target cluster.
+	ScrapesMetrics bool
+}
+
+// CortexValues contains configuration for the cortex frontend sidecar container.
+type CortexValues struct {
+	// Image defines the container image of cortex.
+	Image string
+	// CacheValidity defines the validity of the FIFO cache.
+	CacheValidity time.Duration
 }
 
 func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
@@ -89,6 +178,11 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 		deployment                        = v.emptyDeployment(recommender)
 		podDisruptionBudget               = v.emptyPodDisruptionBudget(recommender)
 		serviceMonitor                    = v.emptyServiceMonitor(recommender)
+		prometheus                        = v.emptyPrometheus()
+		prometheusService                 = v.emptyPrometheusService()
+		scrapeConfig                      = v.emptyScrapeConfig()
+		clusterRolePrometheus             = v.emptyClusterRole(v.prometheusName())
+		clusterRoleBindingPrometheus      = v.emptyClusterRoleBinding(v.prometheusName())
 	)
 
 	configs := component.ResourceConfigs{
@@ -131,6 +225,21 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 			component.ResourceConfig{Obj: deployment, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderDeployment(deployment, nil) }},
 			component.ResourceConfig{Obj: podDisruptionBudget, Class: component.Runtime, MutateFn: func() { v.reconcilePodDisruptionBudget(podDisruptionBudget, deployment) }},
 		)
+
+		if features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
+			configs = append(configs,
+				component.ResourceConfig{Obj: scrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileScrapeConfig(scrapeConfig) }},
+				component.ResourceConfig{Obj: prometheusService, Class: component.Runtime, MutateFn: func() { v.reconcilePrometheusService(prometheusService) }},
+				component.ResourceConfig{Obj: v.serviceAccount(), Class: component.Runtime},
+				component.ResourceConfig{Obj: prometheus, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderPrometheus(prometheus) }},
+				component.ResourceConfig{Obj: clusterRolePrometheus, Class: component.Application, MutateFn: func() {
+					v.reconcilePrometheusClusterRole(clusterRolePrometheus)
+				}},
+				component.ResourceConfig{Obj: clusterRoleBindingPrometheus, Class: component.Application, MutateFn: func() {
+					v.reconcilePrometheusClusterRoleBinding(clusterRoleBindingPrometheus, clusterRolePrometheus)
+				}},
+			)
+		}
 	}
 
 	return configs
@@ -294,6 +403,11 @@ func (v *vpa) reconcileRecommenderDeployment(deployment *appsv1.Deployment, serv
 		deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
 			gardenerutils.NetworkPolicyLabel(v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
 		})
+		if features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
+			deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
+				gardenerutils.NetworkPolicyLabel(v.prometheusName(), prometheusServiceTargetPort): v1beta1constants.LabelNetworkPolicyAllowed,
+			})
+		}
 	}
 
 	v.injectAPIServerConnectionSpec(deployment, recommender, serviceAccountName)
@@ -341,6 +455,14 @@ func (v *vpa) computeRecommenderArgs() []string {
 		fmt.Sprintf("--memory-aggregation-interval-count=%d", ptr.Deref(v.values.Recommender.MemoryAggregationIntervalCount, gardencorev1beta1.DefaultMemoryAggregationIntervalCount)),
 		"--leader-elect=true",
 		fmt.Sprintf("--leader-elect-resource-namespace=%s", v.namespaceForApplicationClassResource()),
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
+		out = append(out, []string{
+			"--storage=prometheus",
+			"--prometheus-address=http://" + v.prometheusName() + "." + v.namespace + ".svc.cluster.local:80",
+			"--prometheus-cadvisor-job-name=scrapeConfig/" + v.namespace + "/" + cAdvisorScrapeConfigName,
+		}...)
 	}
 
 	if v.values.ClusterType == component.ClusterTypeShoot {
