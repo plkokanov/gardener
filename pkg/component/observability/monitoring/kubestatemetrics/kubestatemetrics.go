@@ -23,17 +23,21 @@ import (
 )
 
 const (
+	// LabelKeyComponent is the key for the component label.
+	LabelKeyComponent = "component"
+	// LabelKeyType is the key for the type label.
+	LabelKeyType = "type"
+	// LabelValueComponent is the value for the component label.
+	LabelValueComponent = "kube-state-metrics"
+	// PortNameMetrics is the name of the metrics port.
+	PortNameMetrics = "metrics"
+
 	managedResourceName      = "kube-state-metrics"
 	managedResourceNameShoot = "shoot-core-" + managedResourceName
 
 	containerName = "kube-state-metrics"
 
-	labelKeyComponent   = "component"
-	labelKeyType        = "type"
-	labelValueComponent = "kube-state-metrics"
-
-	port            = 8080
-	portNameMetrics = "metrics"
+	port = 8080
 
 	// SuffixSeed is the suffix for seed kube-state-metrics resources.
 	SuffixSeed = "-seed"

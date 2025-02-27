@@ -180,9 +180,11 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 		serviceMonitor                    = v.emptyServiceMonitor(recommender)
 		prometheus                        = v.emptyPrometheus()
 		prometheusService                 = v.emptyPrometheusService()
-		scrapeConfig                      = v.emptyScrapeConfig()
-		clusterRolePrometheus             = v.emptyClusterRole(v.prometheusName())
-		clusterRoleBindingPrometheus      = v.emptyClusterRoleBinding(v.prometheusName())
+		cAdvisorScrapeConfig              = v.emptyScrapeConfig(cAdvisorScrapeConfigName)
+		kubeStateMetricsScrapeConfig      = v.emptyScrapeConfig(kubeStateMetricsScrapeConfigName)
+		clusterRoleTarget                 = v.emptyClusterRole(v.prometheusName())
+		clusterRoleBindingTarget          = v.emptyClusterRoleBinding(v.prometheusName())
+		clusterRoleBindingSource          = v.emptyClusterRoleBinding(v.prometheusName())
 	)
 
 	configs := component.ResourceConfigs{
@@ -228,15 +230,19 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 
 		if features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
 			configs = append(configs,
-				component.ResourceConfig{Obj: scrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileScrapeConfig(scrapeConfig) }},
+				component.ResourceConfig{Obj: cAdvisorScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileCAdvisorScrapeConfig(cAdvisorScrapeConfig) }},
+				component.ResourceConfig{Obj: kubeStateMetricsScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsScrapeConfig(kubeStateMetricsScrapeConfig) }},
 				component.ResourceConfig{Obj: prometheusService, Class: component.Runtime, MutateFn: func() { v.reconcilePrometheusService(prometheusService) }},
 				component.ResourceConfig{Obj: v.serviceAccount(), Class: component.Runtime},
 				component.ResourceConfig{Obj: prometheus, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderPrometheus(prometheus) }},
-				component.ResourceConfig{Obj: clusterRolePrometheus, Class: component.Application, MutateFn: func() {
-					v.reconcilePrometheusClusterRole(clusterRolePrometheus)
+				component.ResourceConfig{Obj: clusterRoleTarget, Class: component.Application, MutateFn: func() {
+					v.reconcilePrometheusClusterRoleTarget(clusterRoleTarget)
 				}},
-				component.ResourceConfig{Obj: clusterRoleBindingPrometheus, Class: component.Application, MutateFn: func() {
-					v.reconcilePrometheusClusterRoleBinding(clusterRoleBindingPrometheus, clusterRolePrometheus)
+				component.ResourceConfig{Obj: clusterRoleBindingTarget, Class: component.Application, MutateFn: func() {
+					v.reconcilePrometheusClusterRoleBindingTarget(clusterRoleBindingTarget, clusterRoleTarget)
+				}},
+				component.ResourceConfig{Obj: clusterRoleBindingSource, Class: component.Runtime, MutateFn: func() {
+					v.reconcilePrometheusClusterRoleBindingSource(clusterRoleBindingSource)
 				}},
 			)
 		}
@@ -461,7 +467,12 @@ func (v *vpa) computeRecommenderArgs() []string {
 		out = append(out, []string{
 			"--storage=prometheus",
 			"--prometheus-address=http://" + v.prometheusName() + "." + v.namespace + ".svc.cluster.local:80",
-			"--prometheus-cadvisor-job-name=scrapeConfig/" + v.namespace + "/" + cAdvisorScrapeConfigName,
+			"--prometheus-cadvisor-job-name=cadvisor",
+			"--metric-for-pod-labels=kube_pod_labels{job=\"kube-state-metrics\"}[8d]",
+			"--pod-namespace-label=namespace",
+			"--pod-name-label=pod",
+			"--container-name-label=container",
+			"--container-pod-name-label=pod",
 		}...)
 	}
 

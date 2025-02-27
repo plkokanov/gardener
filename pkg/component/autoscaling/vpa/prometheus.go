@@ -17,6 +17,7 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/kubestatemetrics"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -32,17 +33,18 @@ const (
 	// AccessSecretName is the name of the secret containing a token for accessing the shoot cluster.
 	AccessSecretName = gardenerutils.SecretNamePrefixShootAccess + ServiceAccountName
 
-	prometheusServicePort       = 80
-	prometheusServiceTargetPort = 9090
-	prometheusPortName          = "web"
-	cAdvisorScrapeConfigName    = "shoot-vpa-recommender-cadvisor"
+	prometheusServicePort            = 80
+	prometheusServiceTargetPort      = 9090
+	prometheusPortName               = "web"
+	cAdvisorScrapeConfigName         = "shoot-vpa-recommender-cadvisor"
+	kubeStateMetricsScrapeConfigName = "shoot-vpa-recommender-kube-state-metrics"
 )
 
 func getPrometheusRoleLabel() map[string]string {
 	return map[string]string{v1beta1constants.GardenRole: "prometheus-vpa-recommender"}
 }
 
-func (v *vpa) reconcilePrometheusClusterRole(clusterRole *rbacv1.ClusterRole) {
+func (v *vpa) reconcilePrometheusClusterRoleTarget(clusterRole *rbacv1.ClusterRole) {
 	clusterRole.Labels = getPrometheusRoleLabel()
 	clusterRole.Rules = []rbacv1.PolicyRule{
 		{
@@ -62,7 +64,7 @@ func (v *vpa) reconcilePrometheusClusterRole(clusterRole *rbacv1.ClusterRole) {
 	}
 }
 
-func (v *vpa) reconcilePrometheusClusterRoleBinding(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterRole *rbacv1.ClusterRole) {
+func (v *vpa) reconcilePrometheusClusterRoleBindingTarget(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterRole *rbacv1.ClusterRole) {
 	clusterRoleBinding.Labels = getPrometheusRoleLabel()
 	clusterRoleBinding.Annotations = map[string]string{resourcesv1alpha1.DeleteOnInvalidUpdate: "true"}
 	clusterRoleBinding.RoleRef = rbacv1.RoleRef{
@@ -74,6 +76,24 @@ func (v *vpa) reconcilePrometheusClusterRoleBinding(clusterRoleBinding *rbacv1.C
 		Kind:      rbacv1.ServiceAccountKind,
 		Name:      ServiceAccountName,
 		Namespace: v.namespaceForApplicationClassResource(),
+	}}
+}
+
+func (v *vpa) reconcilePrometheusClusterRoleBindingSource(clusterRoleBinding *rbacv1.ClusterRoleBinding) {
+	clusterRoleBinding.Labels = getPrometheusRoleLabel()
+	// TODO(plkokanov): Check if this should be changed to the UID of the shoot's control plane namespace
+	// and add an owner reference to the namespace to ensure proper deletion.
+	clusterRoleBinding.Name += "-" + v.namespace
+	clusterRoleBinding.Annotations = map[string]string{resourcesv1alpha1.DeleteOnInvalidUpdate: "true"}
+	clusterRoleBinding.RoleRef = rbacv1.RoleRef{
+		APIGroup: rbacv1.GroupName,
+		Kind:     "ClusterRole",
+		Name:     "prometheus",
+	}
+	clusterRoleBinding.Subjects = []rbacv1.Subject{{
+		Kind:      rbacv1.ServiceAccountKind,
+		Name:      ServiceAccountName,
+		Namespace: v.namespace,
 	}}
 }
 
@@ -109,16 +129,17 @@ func (v *vpa) reconcilePrometheusService(service *corev1.Service) {
 	}}))
 }
 
-func (v *vpa) emptyScrapeConfig() *monitoringv1alpha1.ScrapeConfig {
+func (v *vpa) emptyScrapeConfig(name string) *monitoringv1alpha1.ScrapeConfig {
 	return &monitoringv1alpha1.ScrapeConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cAdvisorScrapeConfigName,
+			Name:      name,
 			Namespace: v.namespace,
+			Labels:    monitoringutils.Labels(v.values.Recommender.Prometheus.Name),
 		},
 	}
 }
 
-func (v *vpa) reconcileScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
+func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
 	obj.Labels = monitoringutils.Labels(v.values.Recommender.Prometheus.Name)
 	obj.Spec = monitoringv1alpha1.ScrapeConfigSpec{
 		HonorLabels:     ptr.To(false),
@@ -229,6 +250,48 @@ func (v *vpa) reconcileScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
 			// 		Action: "labeldrop",
 			// 	},
 		},
+	}
+}
+
+func (v *vpa) reconcileKubeStateMetricsScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
+	obj.Labels = monitoringutils.Labels(v.values.Recommender.Prometheus.Name)
+	obj.Spec = monitoringv1alpha1.ScrapeConfigSpec{
+		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
+			// Service is used, because we only care about metric from one kube-state-metrics instance and not multiple
+			// in HA setup.
+			Role:       monitoringv1alpha1.KubernetesRoleService,
+			Namespaces: &monitoringv1alpha1.NamespaceDiscovery{Names: []string{v.namespace}},
+		}},
+		RelabelConfigs: []monitoringv1.RelabelConfig{
+			{
+				SourceLabels: []monitoringv1.LabelName{
+					"__meta_kubernetes_service_label_" + kubestatemetrics.LabelKeyComponent,
+					"__meta_kubernetes_service_port_name",
+				},
+				Regex:  kubestatemetrics.LabelValueComponent + ";" + kubestatemetrics.PortNameMetrics,
+				Action: "keep",
+			},
+			{
+				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_service_label_" + kubestatemetrics.LabelKeyType},
+				Regex:        `(.+)`,
+				Replacement:  ptr.To(`${1}`),
+				TargetLabel:  kubestatemetrics.LabelKeyType,
+			},
+			{
+				Action:      "replace",
+				Replacement: ptr.To("kube-state-metrics"),
+				TargetLabel: "job",
+			},
+			{
+				TargetLabel: "instance",
+				Replacement: ptr.To("kube-state-metrics"),
+			},
+		},
+		MetricRelabelConfigs: []monitoringv1.RelabelConfig{{
+			SourceLabels: []monitoringv1.LabelName{"pod"},
+			Regex:        `^.+\.tf-pod.+$`,
+			Action:       "drop",
+		}},
 	}
 }
 

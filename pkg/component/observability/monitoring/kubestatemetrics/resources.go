@@ -143,7 +143,7 @@ func (k *kubeStateMetrics) service() *corev1.Service {
 	service.Spec.Selector = k.getLabels()
 	service.Spec.Ports = kubernetesutils.ReconcileServicePorts(service.Spec.Ports, []corev1.ServicePort{
 		{
-			Name:       portNameMetrics,
+			Name:       PortNameMetrics,
 			Port:       80,
 			TargetPort: intstr.FromInt32(port),
 			Protocol:   corev1.ProtocolTCP,
@@ -353,17 +353,17 @@ func (k *kubeStateMetrics) standardScrapeConfigSpec() monitoringv1alpha1.ScrapeC
 		RelabelConfigs: []monitoringv1.RelabelConfig{
 			{
 				SourceLabels: []monitoringv1.LabelName{
-					"__meta_kubernetes_service_label_" + labelKeyComponent,
+					"__meta_kubernetes_service_label_" + LabelKeyComponent,
 					"__meta_kubernetes_service_port_name",
 				},
-				Regex:  labelValueComponent + k.values.NameSuffix + ";" + portNameMetrics,
+				Regex:  LabelValueComponent + k.values.NameSuffix + ";" + PortNameMetrics,
 				Action: "keep",
 			},
 			{
-				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_service_label_" + labelKeyType},
+				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_service_label_" + LabelKeyType},
 				Regex:        `(.+)`,
 				Replacement:  ptr.To(`${1}`),
-				TargetLabel:  labelKeyType,
+				TargetLabel:  LabelKeyType,
 			},
 			{
 				Action:      "replace",
@@ -542,7 +542,7 @@ func (k *kubeStateMetrics) scrapeConfigSeed() *monitoringv1alpha1.ScrapeConfig {
 					"__meta_kubernetes_service_label_component",
 					"__meta_kubernetes_service_port_name",
 				},
-				Regex:  "kube-state-metrics" + k.values.NameSuffix + ";" + portNameMetrics,
+				Regex:  "kube-state-metrics" + k.values.NameSuffix + ";" + PortNameMetrics,
 				Action: "keep",
 			},
 			{
@@ -579,7 +579,7 @@ func (k *kubeStateMetrics) scrapeConfigGarden() *monitoringv1alpha1.ScrapeConfig
 					"__meta_kubernetes_service_label_component",
 					"__meta_kubernetes_service_port_name",
 				},
-				Regex:  "kube-state-metrics" + k.values.NameSuffix + ";" + portNameMetrics,
+				Regex:  "kube-state-metrics" + k.values.NameSuffix + ";" + PortNameMetrics,
 				Action: "keep",
 			},
 			{
@@ -692,8 +692,8 @@ func (k *kubeStateMetrics) getLabels() map[string]string {
 	}
 
 	return map[string]string{
-		labelKeyComponent: labelValueComponent + k.values.NameSuffix,
-		labelKeyType:      t,
+		LabelKeyComponent: LabelValueComponent + k.values.NameSuffix,
+		LabelKeyType:      t,
 	}
 }
 

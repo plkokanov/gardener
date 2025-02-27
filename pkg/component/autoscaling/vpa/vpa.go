@@ -140,6 +140,8 @@ func (v *vpa) Deploy(ctx context.Context) error {
 		registry = managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
 	}
 
+	// TODO(plkokanov): Deploy prometheus resources here and wait for them to become ready before continuing.
+
 	if v.values.ClusterType == component.ClusterTypeShoot {
 		genericTokenKubeconfigSecret, found := v.secretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
 		if !found {
