@@ -1,8 +1,10 @@
 package vpa
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
@@ -13,32 +15,96 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
+	"github.com/gardener/gardener/pkg/component"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
-	"github.com/gardener/gardener/pkg/component/observability/monitoring/kubestatemetrics"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	"github.com/gardener/gardener/pkg/utils/kubernetes/health"
+	"github.com/gardener/gardener/pkg/utils/retry"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 )
 
 const (
 	// Label is a constant for the label of the cadvisor prometheus instance.
 	Label = "vpa-recommender"
-	// ServiceAccountName is the name of the service account in the shoot cluster.
-	ServiceAccountName = "prometheus-" + Label
-	// AccessSecretName is the name of the secret containing a token for accessing the shoot cluster.
-	AccessSecretName = gardenerutils.SecretNamePrefixShootAccess + ServiceAccountName
+	// PrometheusServiceAccountName is the name of the service account in the shoot cluster.
+	PrometheusServiceAccountName = "prometheus-" + Label
+	// PrometheusAccessSecretName is the name of the secret containing a token for accessing the shoot cluster.
+	PrometheusAccessSecretName = gardenerutils.SecretNamePrefixShootAccess + PrometheusServiceAccountName
+	// PrometheusManagedResourceName is the name of the prometheus managed resource for vpa-recommender for the seed.
+	PrometheusManagedResourceName = "vpa-recommender-prometheus"
+	// TimeoutWaitForPrometheus is the timeout to wait until the vpa-recommender prometheus becomes ready.
+	TimeoutWaitForPrometheus = 10 * time.Minute
+	// IntervalWaitForPrometheus is the interval to check whether the vpa-recommender prometheus has become ready.
+	IntervalWaitForPrometheus = 5 * time.Second
 
-	prometheusServicePort            = 80
-	prometheusServiceTargetPort      = 9090
-	prometheusPortName               = "web"
-	cAdvisorScrapeConfigName         = "shoot-vpa-recommender-cadvisor"
-	kubeStateMetricsScrapeConfigName = "shoot-vpa-recommender-kube-state-metrics"
+	shootPrometheusManagedResourceName = "shoot-core-" + PrometheusManagedResourceName
+	prometheusServicePort              = 80
+	prometheusServiceTargetPort        = 9090
+	prometheusPortName                 = "web"
+	cAdvisorScrapeConfigName           = "shoot-vpa-recommender-cadvisor"
+	kubeStateMetricsScrapeConfigName   = "shoot-vpa-recommender-kube-state-metrics"
 )
+
+func (v *vpa) prometheusManagedResourceName() string {
+	if v.values.ClusterType == component.ClusterTypeSeed {
+		return PrometheusManagedResourceName
+	}
+	return shootPrometheusManagedResourceName
+}
+
+func (v *vpa) waitForPrometheusToBeUpAndRunning(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, TimeoutWaitForPrometheus)
+	defer cancel()
+
+	return retry.Until(timeoutCtx, IntervalWaitForPrometheus, func(ctx context.Context) (done bool, err error) {
+		prometheus := v.emptyPrometheus()
+		if err := v.client.Get(ctx, client.ObjectKeyFromObject(prometheus), prometheus); err != nil {
+			return retry.SevereError(err)
+		}
+
+		if err := health.CheckPrometheus(prometheus); err != nil {
+			return retry.MinorError(err)
+		}
+
+		return retry.Ok()
+	})
+}
+
+func (v *vpa) prometheusResourceConfigs() component.ResourceConfigs {
+	var (
+		prometheus               = v.emptyPrometheus()
+		prometheusService        = v.emptyPrometheusService()
+		cAdvisorScrapeConfig     = v.emptyScrapeConfig(cAdvisorScrapeConfigName)
+		clusterRoleTarget        = v.emptyClusterRole(v.prometheusName())
+		clusterRoleBindingTarget = v.emptyClusterRoleBinding(v.prometheusName())
+		clusterRoleBindingSource = v.emptyClusterRoleBinding(v.prometheusName())
+		selfScrapeConfig         = v.emptyScrapeConfig(v.prometheusName())
+	)
+
+	return component.ResourceConfigs{
+		{Obj: cAdvisorScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileCAdvisorScrapeConfig(cAdvisorScrapeConfig) }},
+		{Obj: selfScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileSelfScrapeConfig(selfScrapeConfig) }},
+		{Obj: prometheusService, Class: component.Runtime, MutateFn: func() { v.reconcilePrometheusService(prometheusService) }},
+		{Obj: v.serviceAccount(), Class: component.Runtime},
+		{Obj: prometheus, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderPrometheus(prometheus) }},
+		{Obj: clusterRoleTarget, Class: component.Application, MutateFn: func() {
+			v.reconcilePrometheusClusterRoleTarget(clusterRoleTarget)
+		}},
+		{Obj: clusterRoleBindingTarget, Class: component.Application, MutateFn: func() {
+			v.reconcilePrometheusClusterRoleBindingTarget(clusterRoleBindingTarget, clusterRoleTarget)
+		}},
+		{Obj: clusterRoleBindingSource, Class: component.Runtime, MutateFn: func() {
+			v.reconcilePrometheusClusterRoleBindingSource(clusterRoleBindingSource)
+		}},
+	}
+}
 
 func getPrometheusRoleLabel() map[string]string {
 	return map[string]string{v1beta1constants.GardenRole: "prometheus-vpa-recommender"}
@@ -46,6 +112,7 @@ func getPrometheusRoleLabel() map[string]string {
 
 func (v *vpa) reconcilePrometheusClusterRoleTarget(clusterRole *rbacv1.ClusterRole) {
 	clusterRole.Labels = getPrometheusRoleLabel()
+	clusterRole.Annotations = map[string]string{resourcesv1alpha1.DeleteOnInvalidUpdate: "true"}
 	clusterRole.Rules = []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{corev1.GroupName},
@@ -74,7 +141,7 @@ func (v *vpa) reconcilePrometheusClusterRoleBindingTarget(clusterRoleBinding *rb
 	}
 	clusterRoleBinding.Subjects = []rbacv1.Subject{{
 		Kind:      rbacv1.ServiceAccountKind,
-		Name:      ServiceAccountName,
+		Name:      PrometheusServiceAccountName,
 		Namespace: v.namespaceForApplicationClassResource(),
 	}}
 }
@@ -92,7 +159,7 @@ func (v *vpa) reconcilePrometheusClusterRoleBindingSource(clusterRoleBinding *rb
 	}
 	clusterRoleBinding.Subjects = []rbacv1.Subject{{
 		Kind:      rbacv1.ServiceAccountKind,
-		Name:      ServiceAccountName,
+		Name:      PrometheusServiceAccountName,
 		Namespace: v.namespace,
 	}}
 }
@@ -102,7 +169,7 @@ func (v *vpa) serviceAccount() *corev1.ServiceAccount {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      v.prometheusName(),
 			Namespace: v.namespace,
-			Labels:    v.getStoragePrometheusLabels(),
+			Labels:    v.getRecommenderPrometheusLabels(),
 		},
 		AutomountServiceAccountToken: ptr.To(false),
 	}
@@ -146,7 +213,7 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 		HonorTimestamps: ptr.To(false),
 		Scheme:          ptr.To("HTTPS"),
 		Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: AccessSecretName},
+			LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
 			Key:                  resourcesv1alpha1.DataKeyToken,
 		}},
 		TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
@@ -162,7 +229,7 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 			Namespaces:      &monitoringv1alpha1.NamespaceDiscovery{Names: []string{metav1.NamespaceSystem}},
 			FollowRedirects: ptr.To(false),
 			Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: AccessSecretName},
+				LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
 				Key:                  resourcesv1alpha1.DataKeyToken,
 			}},
 			TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
@@ -253,49 +320,17 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 	}
 }
 
-func (v *vpa) reconcileKubeStateMetricsScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
+func (v *vpa) reconcileSelfScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
 	obj.Labels = monitoringutils.Labels(v.values.Recommender.Prometheus.Name)
 	obj.Spec = monitoringv1alpha1.ScrapeConfigSpec{
-		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
-			// Service is used, because we only care about metric from one kube-state-metrics instance and not multiple
-			// in HA setup.
-			Role:       monitoringv1alpha1.KubernetesRoleService,
-			Namespaces: &monitoringv1alpha1.NamespaceDiscovery{Names: []string{v.namespace}},
-		}},
-		RelabelConfigs: []monitoringv1.RelabelConfig{
-			{
-				SourceLabels: []monitoringv1.LabelName{
-					"__meta_kubernetes_service_label_" + kubestatemetrics.LabelKeyComponent,
-					"__meta_kubernetes_service_port_name",
-				},
-				Regex:  kubestatemetrics.LabelValueComponent + ";" + kubestatemetrics.PortNameMetrics,
-				Action: "keep",
-			},
-			{
-				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_service_label_" + kubestatemetrics.LabelKeyType},
-				Regex:        `(.+)`,
-				Replacement:  ptr.To(`${1}`),
-				TargetLabel:  kubestatemetrics.LabelKeyType,
-			},
-			{
-				Action:      "replace",
-				Replacement: ptr.To("kube-state-metrics"),
-				TargetLabel: "job",
-			},
-			{
-				TargetLabel: "instance",
-				Replacement: ptr.To("kube-state-metrics"),
-			},
-		},
-		MetricRelabelConfigs: []monitoringv1.RelabelConfig{{
-			SourceLabels: []monitoringv1.LabelName{"pod"},
-			Regex:        `^.+\.tf-pod.+$`,
-			Action:       "drop",
+		JobName: ptr.To("prometheus"),
+		StaticConfigs: []monitoringv1alpha1.StaticConfig{{
+			Targets: []monitoringv1alpha1.Target{monitoringv1alpha1.Target("localhost:9090")},
 		}},
 	}
 }
 
-func (v *vpa) getStoragePrometheusLabels() map[string]string {
+func (v *vpa) getRecommenderPrometheusLabels() map[string]string {
 	return map[string]string{
 		v1beta1constants.LabelApp:  "prometheus",
 		v1beta1constants.LabelRole: "vpa-recommender-history-provider",
@@ -307,12 +342,14 @@ func (v *vpa) prometheusName() string {
 	return "prometheus-" + v.values.Recommender.Prometheus.Name
 }
 
+// TODO(plkokanov): does this prometheus require VPA and PDB?
+// TODO(plkokanov): could we reuse the shoot prometheus, but with a suffix?
 func (v *vpa) emptyPrometheus() *monitoringv1.Prometheus {
 	return &monitoringv1.Prometheus{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      v.values.Recommender.Prometheus.Name,
 			Namespace: v.namespace,
-			Labels:    v.getStoragePrometheusLabels(),
+			Labels:    v.getRecommenderPrometheusLabels(),
 		},
 	}
 }
@@ -370,15 +407,5 @@ func (v *vpa) reconcileRecommenderPrometheus(obj *monitoringv1.Prometheus) {
 
 	if v.values.Recommender.Prometheus.Retention != nil {
 		obj.Spec.Retention = *v.values.Recommender.Prometheus.Retention
-	}
-
-	if v.values.Recommender.Prometheus.RemoteWrite != nil {
-		spec := monitoringv1.RemoteWriteSpec{URL: v.values.Recommender.Prometheus.RemoteWrite.URL}
-
-		if len(v.values.Recommender.Prometheus.RemoteWrite.KeptMetrics) > 0 {
-			spec.WriteRelabelConfigs = []monitoringv1.RelabelConfig{monitoringutils.StandardMetricRelabelConfig(v.values.Recommender.Prometheus.RemoteWrite.KeptMetrics...)[0]}
-		}
-
-		obj.Spec.RemoteWrite = append(obj.Spec.RemoteWrite, spec)
 	}
 }

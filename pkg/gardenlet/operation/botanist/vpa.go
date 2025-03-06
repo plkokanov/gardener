@@ -6,7 +6,6 @@ package botanist
 
 import (
 	"context"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -16,10 +15,8 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/autoscaling/vpa"
-	"github.com/gardener/gardener/pkg/features"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
-	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
 // DefaultVerticalPodAutoscaler returns a deployer for the Kubernetes Vertical Pod Autoscaler.
@@ -40,6 +37,11 @@ func (b *Botanist) DefaultVerticalPodAutoscaler() (vpa.Interface, error) {
 	}
 
 	imagePrometheus, err := imagevector.Containers().FindImage(imagevector.ContainerImageNamePrometheus, imagevectorutils.RuntimeVersion(b.SeedVersion()))
+	if err != nil {
+		return nil, err
+	}
+
+	imageKubeStateMetrics, err := imagevector.Containers().FindImage(imagevector.ContainerImageNameKubeStateMetrics, imagevectorutils.RuntimeVersion(b.SeedVersion()))
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +71,18 @@ func (b *Botanist) DefaultVerticalPodAutoscaler() (vpa.Interface, error) {
 			},
 			VPAMinAllowed: &corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("400Mi")},
 		}
+		valuesKubeStateMetrics = vpa.ValuesKubeStateMetrics{
+			Suffix:            "vpa-recommender",
+			Image:             imageKubeStateMetrics.String(),
+			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane500,
+			Replicas:          ptr.To[int32](1),
+		}
 		valuesRecommender = vpa.ValuesRecommender{
 			Image:             imageRecommender.String(),
 			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane200,
 			Replicas:          ptr.To(b.Shoot.GetReplicas(1)),
 			Prometheus:        valuesPrometheus,
+			KubeStateMetrics:  valuesKubeStateMetrics,
 		}
 		valuesUpdater = vpa.ValuesUpdater{
 			Image:             imageUpdater.String(),
@@ -122,22 +131,7 @@ func (b *Botanist) DefaultVerticalPodAutoscaler() (vpa.Interface, error) {
 // DeployVerticalPodAutoscaler deploys or destroys the VPA to the shoot namespace in the seed.
 func (b *Botanist) DeployVerticalPodAutoscaler(ctx context.Context) error {
 	if !b.Shoot.WantsVerticalPodAutoscaler {
-		if err := kubernetesutils.DeleteObject(ctx, b.SeedClientSet.Client(), gardenerutils.NewShootAccessSecret(vpa.AccessSecretName, b.Shoot.SeedNamespace).Secret); err != nil {
-			return err
-		}
-
 		return b.Shoot.Components.ControlPlane.VerticalPodAutoscaler.Destroy(ctx)
-	}
-
-	if features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
-		// If feature gate is enabled install the access secret
-		if err := gardenerutils.NewShootAccessSecret(vpa.AccessSecretName, b.Shoot.SeedNamespace).Reconcile(ctx, b.SeedClientSet.Client()); err != nil {
-			return fmt.Errorf("failed reconciling access secret for vpa-recommender prometheus: %w", err)
-		}
-	} else {
-		if err := kubernetesutils.DeleteObject(ctx, b.SeedClientSet.Client(), gardenerutils.NewShootAccessSecret(vpa.AccessSecretName, b.Shoot.SeedNamespace).Secret); err != nil {
-			return err
-		}
 	}
 
 	return b.Shoot.Components.ControlPlane.VerticalPodAutoscaler.Deploy(ctx)
