@@ -263,6 +263,10 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 			// },
 		},
 		MetricRelabelConfigs: []monitoringv1.RelabelConfig{
+			monitoringutils.StandardMetricRelabelConfig(
+				"container_cpu_usage_seconds_total",
+				"container_memory_working_set_bytes",
+			)[0],
 			// 	// get system services
 			// 	{
 			// 		SourceLabels: []monitoringv1.LabelName{"id"},
@@ -277,19 +281,6 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 			// 		Replacement:  ptr.To(`$1`),
 			// 		TargetLabel:  "container",
 			// 	},
-			// monitoringutils.StandardMetricRelabelConfig(
-			// 	"container_cpu_cfs_periods_total",
-			// 	"container_cpu_cfs_throttled_seconds_total",
-			// 	"container_cpu_cfs_throttled_periods_total",
-			// 	"container_cpu_usage_seconds_total",
-			// 	"container_fs_inodes_total",
-			// 	"container_fs_limit_bytes",
-			// 	"container_fs_usage_bytes",
-			// 	"container_last_seen",
-			// 	"container_memory_working_set_bytes",
-			// 	"container_network_receive_bytes_total",
-			// 	"container_network_transmit_bytes_total",
-			// )[0],
 			// 	{
 			// 		SourceLabels: []monitoringv1.LabelName{"container", "__name__"},
 			// 		Action:       "drop",
