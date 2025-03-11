@@ -27,7 +27,7 @@ func (b *Botanist) DefaultControlPlaneEncryption() controlplaneencryption.Interf
 		b.SeedClientSet.Client(),
 		&controlplaneencryption.Values{
 			Name:           b.Shoot.GetInfo().Name,
-			Namespace:      b.Shoot.SeedNamespace,
+			Namespace:      b.Shoot.ControlPlaneNamespace,
 			Type:           providerType,
 			ProviderConfig: providerConfig,
 		},

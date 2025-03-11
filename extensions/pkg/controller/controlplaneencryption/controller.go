@@ -16,7 +16,6 @@ import (
 
 	extensionspredicate "github.com/gardener/gardener/extensions/pkg/predicate"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/gardener/gardener/pkg/controllerutils/mapper"
 )
 
 const (
@@ -63,15 +62,14 @@ func Add(ctx context.Context, mgr manager.Manager, args AddArgs) error {
 		return err
 	}
 
-	predicates := extensionspredicate.AddTypePredicate(args.Predicates, args.Type)
-	predicates = append(predicates, extensionspredicate.HasClass(args.ExtensionClass))
+	predicates := extensionspredicate.AddTypeAndClassPredicates(args.Predicates, args.ExtensionClass, args.Type)
 
 	if args.IgnoreOperationAnnotation {
 		if err := ctrl.Watch(
 			source.Kind[client.Object](mgr.GetCache(),
 				&extensionsv1alpha1.Cluster{},
-				mapper.EnqueueRequestsFrom(ctx, mgr.GetCache(), ClusterToControlPlaneEncryptionList(mgr, predicates), mapper.UpdateWithNew, ctrl.GetLogger())),
-		); err != nil {
+				handler.EnqueueRequestsFromMapFunc(ClusterToControlPlaneEncryptionList(mgr.GetClient(), predicates)),
+			)); err != nil {
 			return err
 		}
 	}

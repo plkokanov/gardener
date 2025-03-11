@@ -661,6 +661,8 @@ func (r *Reconciler) updateShootStatusOperationStart(
 					return poolNames.Has(rollout.Name)
 				})
 			})
+		}
+	}
 	// need to start rotation for etcdEncryptionKey
 	// if we change from gardener managed key provider to kms provider
 	// or go from kms provider managed key to gardener managed key
@@ -671,6 +673,7 @@ func (r *Reconciler) updateShootStatusOperationStart(
 		if shoot.Status.Credentials.Rotation != nil && shoot.Status.Credentials.Rotation.ETCDEncryptionKey != nil {
 			lastETCDCRotationInitTime = shoot.Status.Credentials.Rotation.ETCDEncryptionKey.LastInitiationTime
 		}
+		startRotationETCDEncryptionKey(shoot, lastETCDCRotationInitTime)
 	}
 
 	removeNonExistentPoolsFromPendingWorkersRollouts(shoot.Status.Credentials, shoot.Spec.Provider.Workers, v1beta1helper.HibernationIsEnabled(shoot))

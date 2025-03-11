@@ -88,8 +88,7 @@ require (
 
 require (
 	cel.dev/expr v0.19.0 // indirect
-	github.com/go-faster/xor v1.0.0
-	k8s.io/kms v0.31.3
+	k8s.io/kms v0.32.2
 )
 
 require (
@@ -262,7 +261,6 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240911193312-2b36238f13e9 // indirect
 	k8s.io/klog v1.0.0 // indirect
-	k8s.io/kms v0.32.2 // indirect
 	k8s.io/sample-controller v0.30.3 // indirect
 	oras.land/oras-go v1.2.6 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect

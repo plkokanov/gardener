@@ -269,6 +269,41 @@ func MutateShootETCDEncryptionKeyRotation(shoot *gardencorev1beta1.Shoot, f func
 	f(shoot.Status.Credentials.Rotation.ETCDEncryptionKey)
 }
 
+// UsesExternalEncryptionProvider checks if the shoot uses external provider to encrypt resources at rest.
+func UsesExternalEncryptionProvider(shoot *gardencorev1beta1.Shoot) bool {
+	return shoot.Spec.Kubernetes.KubeAPIServer != nil &&
+		shoot.Spec.Kubernetes.KubeAPIServer.EncryptionConfig != nil &&
+		shoot.Spec.Kubernetes.KubeAPIServer.EncryptionConfig.ProviderConfig != nil
+}
+
+func SwitchedETCDEncryptionProvider(shoot *gardencorev1beta1.Shoot) bool {
+	return SwitchedETCDEncryptionProviderToGardener(shoot) || SwitchedETCDEncryptionProviderToExternal(shoot)
+}
+
+// SwitchedETCDEncryptionProviderToGardener checks wether a shoot switched it's credential provider
+func SwitchedETCDEncryptionProviderToGardener(shoot *gardencorev1beta1.Shoot) bool {
+	if shoot.Status.Credentials == nil {
+		shoot.Status.Credentials = &gardencorev1beta1.ShootCredentials{}
+	}
+	if shoot.Status.Credentials.ETCDEncryptionKey == nil {
+		shoot.Status.Credentials.ETCDEncryptionKey = &gardencorev1beta1.ETCDEncryptionKey{}
+	}
+	usesExternalEncProvider := UsesExternalEncryptionProvider(shoot)
+	return shoot.Status.Credentials.ETCDEncryptionKey.Type == gardencorev1beta1.ExternalETCDEncryptionKeyType && !usesExternalEncProvider
+}
+
+// SwitchedETCDEncryptionProviderToGardener checks wether a shoot switched it's credential provider
+func SwitchedETCDEncryptionProviderToExternal(shoot *gardencorev1beta1.Shoot) bool {
+	if shoot.Status.Credentials == nil {
+		shoot.Status.Credentials = &gardencorev1beta1.ShootCredentials{}
+	}
+	if shoot.Status.Credentials.ETCDEncryptionKey == nil {
+		shoot.Status.Credentials.ETCDEncryptionKey = &gardencorev1beta1.ETCDEncryptionKey{}
+	}
+	usesExternalEncProvider := UsesExternalEncryptionProvider(shoot)
+	return shoot.Status.Credentials.ETCDEncryptionKey.Type == gardencorev1beta1.GardenerETCDEncryptionKeyType && usesExternalEncProvider
+}
+
 // GetAllZonesFromShoot returns the set of all availability zones defined in the worker pools of the Shoot specification.
 func GetAllZonesFromShoot(shoot *gardencorev1beta1.Shoot) sets.Set[string] {
 	out := sets.New[string]()

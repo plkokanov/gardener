@@ -90,6 +90,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.DualApprovalForDeletion":                    schema_pkg_apis_core_v1beta1_DualApprovalForDeletion(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCD":                                       schema_pkg_apis_core_v1beta1_ETCD(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCDConfig":                                 schema_pkg_apis_core_v1beta1_ETCDConfig(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCDEncryptionKey":                          schema_pkg_apis_core_v1beta1_ETCDEncryptionKey(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCDEncryptionKeyRotation":                  schema_pkg_apis_core_v1beta1_ETCDEncryptionKeyRotation(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.EncryptionConfig":                           schema_pkg_apis_core_v1beta1_EncryptionConfig(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersion":                           schema_pkg_apis_core_v1beta1_ExpirableVersion(ref),
@@ -3496,6 +3497,24 @@ func schema_pkg_apis_core_v1beta1_ETCDConfig(ref common.ReferenceCallback) commo
 		},
 		Dependencies: []string{
 			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ControlPlaneAutoscaling"},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_ETCDEncryptionKey(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -8803,11 +8822,16 @@ func schema_pkg_apis_core_v1beta1_ShootCredentials(ref common.ReferenceCallback)
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ShootCredentialsRotation"),
 						},
 					},
+					"etcdEncryptionKey": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCDEncryptionKey"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ShootCredentialsRotation"},
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCDEncryptionKey", "github.com/gardener/gardener/pkg/apis/core/v1beta1.ShootCredentialsRotation"},
 	}
 }
 
