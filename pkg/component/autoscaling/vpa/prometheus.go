@@ -77,15 +77,29 @@ func (v *vpa) waitForPrometheusToBeUpAndRunning(ctx context.Context) error {
 	})
 }
 
+func (v *vpa) prometheusResourceConfigsForShoot() component.ResourceConfigs {
+	var (
+		clusterRoleBindingTarget = v.emptyClusterRoleBinding(v.prometheusName())
+		clusterRoleTarget        = v.emptyClusterRole(v.prometheusName())
+	)
+
+	return component.ResourceConfigs{
+		{Obj: clusterRoleBindingTarget, Class: component.Application, MutateFn: func() {
+			v.reconcilePrometheusClusterRoleBindingTarget(clusterRoleBindingTarget, clusterRoleTarget)
+		}},
+		{Obj: clusterRoleTarget, Class: component.Application, MutateFn: func() {
+			v.reconcilePrometheusClusterRoleTarget(clusterRoleTarget)
+		}},
+	}
+}
+
 func (v *vpa) prometheusResourceConfigs() component.ResourceConfigs {
 	var (
 		prometheus               = v.emptyPrometheus()
 		prometheusService        = v.emptyPrometheusService()
 		cAdvisorScrapeConfig     = v.emptyScrapeConfig(cAdvisorScrapeConfigName)
-		clusterRoleTarget        = v.emptyClusterRole(v.prometheusName())
-		clusterRoleBindingTarget = v.emptyClusterRoleBinding(v.prometheusName())
-		clusterRoleBindingSource = v.emptyClusterRoleBinding(v.prometheusName())
 		selfScrapeConfig         = v.emptyScrapeConfig(v.prometheusName())
+		clusterRoleBindingSource = v.emptyClusterRoleBinding(v.prometheusName())
 	)
 
 	return component.ResourceConfigs{
@@ -94,12 +108,6 @@ func (v *vpa) prometheusResourceConfigs() component.ResourceConfigs {
 		{Obj: prometheusService, Class: component.Runtime, MutateFn: func() { v.reconcilePrometheusService(prometheusService) }},
 		{Obj: v.serviceAccount(), Class: component.Runtime},
 		{Obj: prometheus, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderPrometheus(prometheus) }},
-		{Obj: clusterRoleTarget, Class: component.Application, MutateFn: func() {
-			v.reconcilePrometheusClusterRoleTarget(clusterRoleTarget)
-		}},
-		{Obj: clusterRoleBindingTarget, Class: component.Application, MutateFn: func() {
-			v.reconcilePrometheusClusterRoleBindingTarget(clusterRoleBindingTarget, clusterRoleTarget)
-		}},
 		{Obj: clusterRoleBindingSource, Class: component.Runtime, MutateFn: func() {
 			v.reconcilePrometheusClusterRoleBindingSource(clusterRoleBindingSource)
 		}},
@@ -207,6 +215,27 @@ func (v *vpa) emptyScrapeConfig(name string) *monitoringv1alpha1.ScrapeConfig {
 }
 
 func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
+	kubernetesSDConfigs := []monitoringv1alpha1.KubernetesSDConfig{{
+		Role: monitoringv1alpha1.KubernetesRoleNode,
+	}}
+
+	if v.values.ClusterType == component.ClusterTypeShoot {
+		kubernetesSDConfigs = []monitoringv1alpha1.KubernetesSDConfig{{
+			Role:            monitoringv1alpha1.KubernetesRoleNode,
+			APIServer:       ptr.To("https://" + v1beta1constants.DeploymentNameKubeAPIServer + ":" + strconv.Itoa(kubeapiserverconstants.Port)),
+			Namespaces:      &monitoringv1alpha1.NamespaceDiscovery{Names: []string{metav1.NamespaceSystem}},
+			FollowRedirects: ptr.To(false),
+			Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
+				Key:                  resourcesv1alpha1.DataKeyToken,
+			}},
+			TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
+				Key:                  secretsutils.DataKeyCertificateBundle,
+			}}},
+		}}
+	}
+
 	obj.Labels = monitoringutils.Labels(v.values.Recommender.Prometheus.Name)
 	obj.Spec = monitoringv1alpha1.ScrapeConfigSpec{
 		HonorLabels:     ptr.To(false),
@@ -223,20 +252,7 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 		// StaticConfigs: []monitoringv1alpha1.StaticConfig{{
 		// 	Targets: []monitoringv1alpha1.Target{"cadvisor:8080"},
 		//}},
-		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
-			Role:            monitoringv1alpha1.KubernetesRoleNode,
-			APIServer:       ptr.To("https://" + v1beta1constants.DeploymentNameKubeAPIServer + ":" + strconv.Itoa(kubeapiserverconstants.Port)),
-			Namespaces:      &monitoringv1alpha1.NamespaceDiscovery{Names: []string{metav1.NamespaceSystem}},
-			FollowRedirects: ptr.To(false),
-			Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
-				Key:                  resourcesv1alpha1.DataKeyToken,
-			}},
-			TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
-				Key:                  secretsutils.DataKeyCertificateBundle,
-			}}},
-		}},
+		KubernetesSDConfigs: kubernetesSDConfigs,
 		RelabelConfigs: []monitoringv1.RelabelConfig{
 			{
 				Action:      "replace",

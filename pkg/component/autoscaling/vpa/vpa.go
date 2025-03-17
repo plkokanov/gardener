@@ -142,7 +142,8 @@ func (v *vpa) Deploy(ctx context.Context) error {
 	}
 
 	// TODO(plkokanov): should we separate this special prometheus deployment in a separate component?
-	if v.values.ClusterType == component.ClusterTypeShoot && features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
+	if features.DefaultFeatureGate.Enabled(features.VPARecommenderHistoryFromPrometheus) {
+		// TODO(plkokanov): will this work for hibernated shoot clusters?
 		if err := v.deployKubeStateMetricsForVPARecommender(ctx); err != nil {
 			return err
 		}
@@ -189,40 +190,52 @@ func (v *vpa) Deploy(ctx context.Context) error {
 }
 
 func (v *vpa) deployKubeStateMetricsForVPARecommender(ctx context.Context) error {
-	genericTokenKubeconfigSecret, found := v.secretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
-	if !found {
-		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameGenericTokenKubeconfig)
+	if v.values.ClusterType == component.ClusterTypeShoot {
+		genericTokenKubeconfigSecret, found := v.secretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
+		if !found {
+			return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameGenericTokenKubeconfig)
+		}
+
+		if err := gardenerutils.NewShootAccessSecret(KubeStateMetricsAccessSecretName, v.namespace).Reconcile(ctx, v.client); err != nil {
+			return fmt.Errorf("failed reconciling access secret for vpa-recommender kube-state-metrics: %w", err)
+		}
+
+		kubeStateMetricsResources := component.MergeResourceConfigs(v.kubeStateMetricsResourceConfigs(), v.kubeStateMetricsForShoot(genericTokenKubeconfigSecret.Name, KubeStateMetricsAccessSecretName))
+		kubeStateMetricsRegistry := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
+
+		if err := component.DeployResourceConfigs(ctx, v.client, v.namespace, v.values.ClusterType, v.kubeStateMetricsManagedResourceName(), nil, kubeStateMetricsRegistry, kubeStateMetricsResources); err != nil {
+			return err
+		}
+	} else if v.values.ClusterType == component.ClusterTypeSeed {
+		kubeStateMetricsResources := component.MergeResourceConfigs(v.kubeStateMetricsResourceConfigs(), v.kubeStateMetricsForSeed())
+		kubeStateMetricsRegistry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+
+		if err := component.DeployResourceConfigs(ctx, v.client, v.namespace, v.values.ClusterType, v.kubeStateMetricsManagedResourceName(), nil, kubeStateMetricsRegistry, kubeStateMetricsResources); err != nil {
+			return err
+		}
 	}
 
-	if err := gardenerutils.NewShootAccessSecret(KubeStateMetricsAccessSecretName, v.namespace).Reconcile(ctx, v.client); err != nil {
-		return fmt.Errorf("failed reconciling access secret for vpa-recommender kube-state-metrics: %w", err)
-	}
-
-	kubeStateMetricsResources := component.MergeResourceConfigs(v.kubeStateMetricsResourceConfigs(genericTokenKubeconfigSecret.Name, KubeStateMetricsAccessSecretName))
-	kubeStateMetricsRegistry := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
-
-	if err := component.DeployResourceConfigs(ctx, v.client, v.namespace, v.values.ClusterType, v.kubeStateMetricsManagedResourceName(), nil, kubeStateMetricsRegistry, kubeStateMetricsResources); err != nil {
-		return err
-	}
-	if err := v.waitForKubeStateMetricsToBeUpAndRunning(ctx); err != nil {
-		return err
-	}
-	return nil
+	return v.waitForKubeStateMetricsToBeUpAndRunning(ctx)
 }
 
 func (v *vpa) deployPrometheusForVPARecommender(ctx context.Context) error {
 	if err := gardenerutils.NewShootAccessSecret(PrometheusAccessSecretName, v.namespace).Reconcile(ctx, v.client); err != nil {
 		return fmt.Errorf("failed reconciling access secret for vpa-recommender prometheus: %w", err)
 	}
-	prometheusResources := component.MergeResourceConfigs(v.prometheusResourceConfigs())
-	prometheusRegistry := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
+	prometheusResources := v.prometheusResourceConfigs()
+
+	var prometheusRegistry *managedresources.Registry
+	if v.values.ClusterType == component.ClusterTypeShoot {
+		prometheusResources = component.MergeResourceConfigs(prometheusResources, v.prometheusResourceConfigsForShoot())
+		prometheusRegistry = managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
+	} else {
+		prometheusRegistry = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.ShootSerializer)
+	}
 	if err := component.DeployResourceConfigs(ctx, v.client, v.namespace, v.values.ClusterType, v.prometheusManagedResourceName(), nil, prometheusRegistry, prometheusResources); err != nil {
 		return err
 	}
-	if err := v.waitForPrometheusToBeUpAndRunning(ctx); err != nil {
-		return err
-	}
-	return nil
+
+	return v.waitForPrometheusToBeUpAndRunning(ctx)
 }
 
 func (v *vpa) Destroy(ctx context.Context) error {

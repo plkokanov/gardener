@@ -75,24 +75,57 @@ func (v *vpa) getKubeStateMetricsDeploymentName() string {
 	return "kube-state-metrics-" + v.values.Recommender.KubeStateMetrics.Suffix
 }
 
-func (v *vpa) kubeStateMetricsResourceConfigs(genericTokenKubeconfigSecretName string, shootAccessSecretName string) component.ResourceConfigs {
+func (v *vpa) kubeStateMetricsForSeed() component.ResourceConfigs {
 	var (
-		clusterRole                  = v.emptyClusterRole(v.getKubeStateMetricsDeploymentName())
-		clusterRoleBinding           = v.emptyClusterRoleBinding(v.getKubeStateMetricsDeploymentName())
-		kubeStateMetricsScrapeConfig = v.emptyScrapeConfig(kubeStateMetricsScrapeConfigName)
-		deployment                   = v.emptyDeployment(v.getKubeStateMetricsDeploymentName())
-		service                      = v.emptyService(v.getKubeStateMetricsDeploymentName())
+		serviceAccount = v.emptyServiceAccount(v.getKubeStateMetricsDeploymentName())
+		clusterRole    = v.emptyClusterRole(v.getKubeStateMetricsDeploymentName())
+		// TODO(plkokanov): add PDBs
+		// ADD VPA if necessary
+		clusterRoleBinding = v.emptyClusterRoleBinding(v.getKubeStateMetricsDeploymentName())
+		deployment         = v.emptyDeployment(v.getKubeStateMetricsDeploymentName())
+	)
+
+	return component.ResourceConfigs{
+		{Obj: serviceAccount, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsServiceAccount(serviceAccount) }},
+		{Obj: clusterRole, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsRuntimeClusterRole(clusterRole) }},
+		{Obj: clusterRoleBinding, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsRuntimeClusterRoleBinding(clusterRoleBinding, clusterRole) }},
+		{Obj: deployment, Class: component.Runtime, MutateFn: func() {
+			v.reconcileKubeStateMetricsDeployment(deployment, serviceAccount, "", "")
+		}},
+	}
+}
+
+func (v *vpa) kubeStateMetricsForShoot(genericTokenKubeconfigSecretName string, shootAccessSecretName string) component.ResourceConfigs {
+	var (
+		clusterRole        = v.emptyClusterRole(v.getKubeStateMetricsDeploymentName())
+		clusterRoleBinding = v.emptyClusterRoleBinding(v.getKubeStateMetricsDeploymentName())
+		deployment         = v.emptyDeployment(v.getKubeStateMetricsDeploymentName())
 	)
 
 	return component.ResourceConfigs{
 		{Obj: clusterRole, Class: component.Application, MutateFn: func() { v.reconcileKubeStateMetricsClusterRole(clusterRole) }},
 		{Obj: clusterRoleBinding, Class: component.Application, MutateFn: func() { v.reconcileKubeStateMetricsClusterRoleBinding(clusterRoleBinding, clusterRole) }},
-		{Obj: kubeStateMetricsScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsScrapeConfig(kubeStateMetricsScrapeConfig) }},
 		{Obj: deployment, Class: component.Runtime, MutateFn: func() {
-			v.reconcileKubeStateMetricsDeployment(deployment, genericTokenKubeconfigSecretName, shootAccessSecretName)
+			v.reconcileKubeStateMetricsDeployment(deployment, nil, genericTokenKubeconfigSecretName, shootAccessSecretName)
 		}},
+	}
+}
+
+func (v *vpa) kubeStateMetricsResourceConfigs() component.ResourceConfigs {
+	var (
+		kubeStateMetricsScrapeConfig = v.emptyScrapeConfig(kubeStateMetricsScrapeConfigName)
+		service                      = v.emptyService(v.getKubeStateMetricsDeploymentName())
+	)
+
+	return component.ResourceConfigs{
+		{Obj: kubeStateMetricsScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsScrapeConfig(kubeStateMetricsScrapeConfig) }},
 		{Obj: service, Class: component.Runtime, MutateFn: func() { v.reconcileKubeStateMetricsService(service) }},
 	}
+}
+
+func (v *vpa) reconcileKubeStateMetricsServiceAccount(serviceAccount *corev1.ServiceAccount) {
+	serviceAccount.Labels = v.getKubeStateMetricsLabels()
+	serviceAccount.AutomountServiceAccountToken = ptr.To(false)
 }
 
 func (v *vpa) reconcileKubeStateMetricsScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
@@ -160,6 +193,35 @@ func (v *vpa) reconcileKubeStateMetricsClusterRoleBinding(clusterRoleBinding *rb
 	}}
 }
 
+func (v *vpa) reconcileKubeStateMetricsRuntimeClusterRole(clusterRole *rbacv1.ClusterRole) {
+	clusterRole.Labels = getKubeStateMetricsRoleLabels()
+	clusterRole.Annotations = map[string]string{resourcesv1alpha1.DeleteOnInvalidUpdate: "true"}
+	clusterRole.Rules = []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{""},
+			Resources: []string{
+				"pods",
+			},
+			Verbs: []string{"list", "watch"},
+		},
+	}
+}
+
+func (v *vpa) reconcileKubeStateMetricsRuntimeClusterRoleBinding(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterRole *rbacv1.ClusterRole) {
+	clusterRoleBinding.Labels = getKubeStateMetricsRoleLabels()
+	clusterRoleBinding.Annotations = map[string]string{resourcesv1alpha1.DeleteOnInvalidUpdate: "true"}
+	clusterRoleBinding.RoleRef = rbacv1.RoleRef{
+		APIGroup: rbacv1.GroupName,
+		Kind:     "ClusterRole",
+		Name:     clusterRole.Name,
+	}
+	clusterRoleBinding.Subjects = []rbacv1.Subject{{
+		Kind:      rbacv1.ServiceAccountKind,
+		Name:      KubeStateMetricsServiceAccountName,
+		Namespace: v.namespaceForApplicationClassResource(),
+	}}
+}
+
 func (v *vpa) reconcileKubeStateMetricsService(service *corev1.Service) {
 	service.Labels = v.getKubeStateMetricsLabels()
 
@@ -168,7 +230,13 @@ func (v *vpa) reconcileKubeStateMetricsService(service *corev1.Service) {
 		Protocol: ptr.To(corev1.ProtocolTCP),
 	}
 
-	utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(service, metricsPort))
+	switch v.values.ClusterType {
+	case component.ClusterTypeSeed:
+		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForGardenScrapeTargets(service, metricsPort))
+		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForSeedScrapeTargets(service, metricsPort))
+	case component.ClusterTypeShoot:
+		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(service, metricsPort))
+	}
 
 	service.Spec.Type = corev1.ServiceTypeClusterIP
 	service.Spec.Selector = v.getKubeStateMetricsLabels()
@@ -182,7 +250,7 @@ func (v *vpa) reconcileKubeStateMetricsService(service *corev1.Service) {
 	}, corev1.ServiceTypeClusterIP)
 }
 
-func (v *vpa) reconcileKubeStateMetricsDeployment(deployment *appsv1.Deployment, genericTokenKubeconfigSecretName string, shootAccessSecretName string) {
+func (v *vpa) reconcileKubeStateMetricsDeployment(deployment *appsv1.Deployment, serviceAccount *corev1.ServiceAccount, genericTokenKubeconfigSecretName string, shootAccessSecretName string) {
 	var (
 		maxUnavailable = intstr.FromInt32(1)
 
@@ -196,16 +264,27 @@ func (v *vpa) reconcileKubeStateMetricsDeployment(deployment *appsv1.Deployment,
 		}
 	)
 
-	podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
-		gardenerutils.NetworkPolicyLabel(v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
-	})
+	if v.values.ClusterType == component.ClusterTypeSeed {
+		podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
+			v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer: v1beta1constants.LabelNetworkPolicyAllowed,
+		})
+	}
+
+	if v.values.ClusterType == component.ClusterTypeShoot {
+		podLabels = utils.MergeStringMaps(podLabels, deploymentLabels, map[string]string{
+			gardenerutils.NetworkPolicyLabel(v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
+		})
+	}
 
 	args = append(args,
 		"--resources=pods",
-		"--kubeconfig="+gardenerutils.PathGenericKubeconfig,
 		"--metric-allowlist=^kube_pod_labels$",
 		"--metric-labels-allowlist=pods=[origin]",
 	)
+
+	if v.values.ClusterType == component.ClusterTypeShoot {
+		args = append(args, "--kubeconfig="+gardenerutils.PathGenericKubeconfig)
+	}
 
 	deployment.Labels = deploymentLabels
 	deployment.Spec.Replicas = v.values.Recommender.KubeStateMetrics.Replicas
@@ -269,8 +348,14 @@ func (v *vpa) reconcileKubeStateMetricsDeployment(deployment *appsv1.Deployment,
 		},
 	}
 
-	deployment.Spec.Template.Spec.AutomountServiceAccountToken = ptr.To(false)
-	utilruntime.Must(gardenerutils.InjectGenericKubeconfig(deployment, genericTokenKubeconfigSecretName, shootAccessSecretName))
+	if v.values.ClusterType == component.ClusterTypeSeed {
+		deployment.Spec.Template.Spec.ServiceAccountName = serviceAccount.Name
+	}
+
+	if v.values.ClusterType == component.ClusterTypeShoot {
+		deployment.Spec.Template.Spec.AutomountServiceAccountToken = ptr.To(false)
+		utilruntime.Must(gardenerutils.InjectGenericKubeconfig(deployment, genericTokenKubeconfigSecretName, shootAccessSecretName))
+	}
 }
 
 func getKubeStateMetricsRoleLabels() map[string]string {
