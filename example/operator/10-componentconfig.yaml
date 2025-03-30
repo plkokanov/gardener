@@ -29,6 +29,7 @@ debugging:
   enableContentionProfiling: false
 featureGates:
   DefaultSeccompProfile: true
+  VPARecommenderHistoryFromPrometheus: true
 controllers:
   garden:
     concurrentSyncs: 1

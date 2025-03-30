@@ -111,6 +111,8 @@ type ValuesPrometheus struct {
 	ResourceRequests *corev1.ResourceList
 	// Repplicas is the number of replicas.
 	Replicas *int32
+	// IsManagedSeed specifies whether the deployment happens in a managed seed.
+	IsManagedSeed bool
 }
 
 type ValuesKubeStateMetrics struct {

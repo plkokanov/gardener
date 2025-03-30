@@ -18,7 +18,6 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/autoscaling/vpa"
-	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
@@ -34,6 +33,7 @@ func NewVerticalPodAutoscaler(
 	priorityClassNameAdmissionController string,
 	priorityClassNameRecommender string,
 	priorityClassNameUpdater string,
+	isManagedSeed bool,
 ) (
 	component.DeployWaiter,
 	error,
@@ -83,13 +83,15 @@ func NewVerticalPodAutoscaler(
 				Prometheus: vpa.ValuesPrometheus{
 					Name:              "vpa-recommender",
 					Image:             imagePrometheus.String(),
-					PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane500,
+					PriorityClassName: priorityClassNameRecommender,
 					StorageCapacity:   resource.MustParse("2Gi"),
 					Replicas:          ptr.To[int32](1),
 					RetentionSize:     "1GB",
 					ScrapeTimeout:     "50s", // This is intentionally smaller than the scrape interval of 1m.
 					AdditionalPodLabels: map[string]string{
-						gardenerutils.NetworkPolicyLabel("prometheus-garden", 9090): v1beta1constants.LabelNetworkPolicyAllowed,
+						"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets:                                                                       v1beta1constants.LabelNetworkPolicyAllowed,
+						"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyGardenScrapeTargets:                                                                     v1beta1constants.LabelNetworkPolicyAllowed,
+						"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyExtensionsNamespaceAlias + "-" + v1beta1constants.LabelNetworkPolicyGardenScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
 					},
 					Version: ptr.Deref(imagePrometheus.Version, "v0.0.0"),
 					ResourceRequests: &corev1.ResourceList{
@@ -97,11 +99,12 @@ func NewVerticalPodAutoscaler(
 						corev1.ResourceMemory: resource.MustParse("400M"),
 					},
 					VPAMinAllowed: &corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("400Mi")},
+					IsManagedSeed: isManagedSeed,
 				},
 				KubeStateMetrics: vpa.ValuesKubeStateMetrics{
 					Suffix:            "vpa-recommender",
 					Image:             imageKubeStateMetrics.String(),
-					PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane500,
+					PriorityClassName: priorityClassNameRecommender,
 					Replicas:          ptr.To[int32](1),
 				},
 			},

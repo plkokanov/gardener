@@ -179,7 +179,7 @@ func (v *vpa) serviceAccount() *corev1.ServiceAccount {
 			Namespace: v.namespace,
 			Labels:    v.getRecommenderPrometheusLabels(),
 		},
-		AutomountServiceAccountToken: ptr.To(false),
+		// AutomountServiceAccountToken: ptr.To(false),
 	}
 }
 
@@ -215,11 +215,19 @@ func (v *vpa) emptyScrapeConfig(name string) *monitoringv1alpha1.ScrapeConfig {
 }
 
 func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig) {
-	kubernetesSDConfigs := []monitoringv1alpha1.KubernetesSDConfig{{
-		Role: monitoringv1alpha1.KubernetesRoleNode,
-	}}
+	var (
+		kubernetesSDConfigs []monitoringv1alpha1.KubernetesSDConfig
+		authorization       *monitoringv1.SafeAuthorization
+		relabelConfigs      []monitoringv1.RelabelConfig
+		tlsConfig           *monitoringv1.SafeTLSConfig
+	)
 
 	if v.values.ClusterType == component.ClusterTypeShoot {
+		tlsConfig = &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
+			Key:                  secretsutils.DataKeyCertificateBundle,
+		}}}
+
 		kubernetesSDConfigs = []monitoringv1alpha1.KubernetesSDConfig{{
 			Role:            monitoringv1alpha1.KubernetesRoleNode,
 			APIServer:       ptr.To("https://" + v1beta1constants.DeploymentNameKubeAPIServer + ":" + strconv.Itoa(kubeapiserverconstants.Port)),
@@ -229,31 +237,19 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 				LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
 				Key:                  resourcesv1alpha1.DataKeyToken,
 			}},
-			TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
-				Key:                  secretsutils.DataKeyCertificateBundle,
-			}}},
+			TLSConfig: &monitoringv1.SafeTLSConfig{
+				CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
+					Key:                  secretsutils.DataKeyCertificateBundle,
+				}}},
 		}}
-	}
 
-	obj.Labels = monitoringutils.Labels(v.values.Recommender.Prometheus.Name)
-	obj.Spec = monitoringv1alpha1.ScrapeConfigSpec{
-		HonorLabels:     ptr.To(false),
-		HonorTimestamps: ptr.To(false),
-		Scheme:          ptr.To("HTTPS"),
-		Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
+		authorization = &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
 			Key:                  resourcesv1alpha1.DataKeyToken,
-		}},
-		TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
-			Key:                  secretsutils.DataKeyCertificateBundle,
-		}}},
-		// StaticConfigs: []monitoringv1alpha1.StaticConfig{{
-		// 	Targets: []monitoringv1alpha1.Target{"cadvisor:8080"},
-		//}},
-		KubernetesSDConfigs: kubernetesSDConfigs,
-		RelabelConfigs: []monitoringv1.RelabelConfig{
+		}}
+
+		relabelConfigs = []monitoringv1.RelabelConfig{
 			{
 				Action:      "replace",
 				Replacement: ptr.To("cadvisor"),
@@ -277,7 +273,70 @@ func (v *vpa) reconcileCAdvisorScrapeConfig(obj *monitoringv1alpha1.ScrapeConfig
 			// 	TargetLabel: "type",
 			// 	Replacement: ptr.To("shoot"),
 			// },
-		},
+		}
+	}
+
+	if v.values.ClusterType == component.ClusterTypeSeed {
+		kubernetesSDConfigs = []monitoringv1alpha1.KubernetesSDConfig{{
+			Role: monitoringv1alpha1.KubernetesRoleNode,
+		}}
+
+		tlsConfig = &monitoringv1.SafeTLSConfig{
+			InsecureSkipVerify: ptr.To(!v.values.Recommender.Prometheus.IsManagedSeed),
+			CA:                 monitoringv1.SecretOrConfigMap{},
+		}
+
+		authorization = &monitoringv1.SafeAuthorization{
+			Credentials: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: PrometheusAccessSecretName},
+				Key:                  resourcesv1alpha1.DataKeyToken,
+			},
+			Type: "Bearer",
+		}
+
+		relabelConfigs = []monitoringv1.RelabelConfig{
+			{
+				Action:      "replace",
+				Replacement: ptr.To("cadvisor"),
+				TargetLabel: "job",
+			},
+			// {
+			// 	Action: "labelmap",
+			// 	Regex:  `__meta_kubernetes_node_label_(.+)`,
+			// },
+			{
+				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_node_address_InternalIP"},
+				TargetLabel:  "instance",
+			},
+			{
+				TargetLabel: "__address__",
+				Replacement: ptr.To("kubernetes.default.svc"),
+			},
+			{
+				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_node_name"},
+				Regex:        `(.+)`,
+				Replacement:  ptr.To(`/api/v1/nodes/${1}/proxy/metrics/cadvisor`),
+				TargetLabel:  "__metrics_path__",
+			},
+			// {
+			// 	TargetLabel: "type",
+			// 	Replacement: ptr.To("shoot"),
+			// },
+		}
+	}
+
+	obj.Labels = monitoringutils.Labels(v.values.Recommender.Prometheus.Name)
+	obj.Spec = monitoringv1alpha1.ScrapeConfigSpec{
+		HonorLabels:     ptr.To(false),
+		HonorTimestamps: ptr.To(false),
+		Scheme:          ptr.To("HTTPS"),
+		Authorization:   authorization,
+		TLSConfig:       tlsConfig,
+		// StaticConfigs: []monitoringv1alpha1.StaticConfig{{
+		// 	Targets: []monitoringv1alpha1.Target{"cadvisor:8080"},
+		//}},
+		KubernetesSDConfigs: kubernetesSDConfigs,
+		RelabelConfigs:      relabelConfigs,
 		MetricRelabelConfigs: []monitoringv1.RelabelConfig{
 			monitoringutils.StandardMetricRelabelConfig(
 				"container_cpu_usage_seconds_total",
@@ -373,10 +432,16 @@ func (v *vpa) reconcileRecommenderPrometheus(obj *monitoringv1.Prometheus) {
 
 			PodMetadata: &monitoringv1.EmbeddedObjectMetadata{
 				Labels: utils.MergeStringMaps(map[string]string{
-					v1beta1constants.LabelNetworkPolicyToDNS:                                                     v1beta1constants.LabelNetworkPolicyAllowed,
-					v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer:                                        v1beta1constants.LabelNetworkPolicyAllowed,
-					v1beta1constants.LabelObservabilityApplication:                                               v.prometheusName(),
-					"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+					v1beta1constants.LabelNetworkPolicyToDNS:              v1beta1constants.LabelNetworkPolicyAllowed,
+					v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer: v1beta1constants.LabelNetworkPolicyAllowed,
+					v1beta1constants.LabelObservabilityApplication:        v.prometheusName(),
+					v1beta1constants.LabelNetworkPolicyToPublicNetworks:   v1beta1constants.LabelNetworkPolicyAllowed,
+					v1beta1constants.LabelNetworkPolicyToPrivateNetworks:  v1beta1constants.LabelNetworkPolicyAllowed,
+					// TODO(plkokanov): Split network policies depending on whether we are installing in garden, seed or shoot control plane
+					"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyScrapeTargets:                                                                           v1beta1constants.LabelNetworkPolicyAllowed,
+					"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets:                                                                       v1beta1constants.LabelNetworkPolicyAllowed,
+					"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyGardenScrapeTargets:                                                                     v1beta1constants.LabelNetworkPolicyAllowed,
+					"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyExtensionsNamespaceAlias + "-" + v1beta1constants.LabelNetworkPolicyGardenScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
 				}),
 			},
 			PriorityClassName: v.values.Recommender.PriorityClassName,
