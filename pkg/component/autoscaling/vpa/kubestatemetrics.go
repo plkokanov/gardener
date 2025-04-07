@@ -279,7 +279,7 @@ func (v *vpa) reconcileKubeStateMetricsDeployment(deployment *appsv1.Deployment,
 	args = append(args,
 		"--resources=pods",
 		"--metric-allowlist=^kube_pod_labels$",
-		"--metric-labels-allowlist=pods=[origin]",
+		"--metric-labels-allowlist=pods=[*]",
 	)
 
 	if v.values.ClusterType == component.ClusterTypeShoot {

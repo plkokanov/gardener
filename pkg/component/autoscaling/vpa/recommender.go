@@ -409,6 +409,7 @@ func (v *vpa) computeRecommenderArgs() []string {
 			"--pod-name-label=pod",
 			"--container-name-label=container",
 			"--container-pod-name-label=pod",
+			"--pod-label-prefix=label_",
 		}...)
 	}
 
