@@ -6,6 +6,7 @@ package vpa
 
 import (
 	"fmt"
+	"strconv"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -73,6 +74,31 @@ type ValuesRecommender struct {
 	PriorityClassName string
 	// Replicas is the number of pod replicas.
 	Replicas *int32
+	// PrometheusHistoryProvider contains configuration for the prometheus history provider.
+	PrometheusHistoryProvider *PrometheusHistoryProvider
+}
+
+type PrometheusHistoryProvider struct {
+	// ServiceName is the name of the prometheus instance to be used as history provider.
+	ServiceName string
+	// Namespace is the namespace of the prometheus instance to be used as history provider.
+	Namespace string
+	// Port is the port of the prometheus instance to be used as history provider
+	Port int
+	// CAdvisorJobName is the name of the cadvisor job.
+	CAdvisorJobName string
+	// MetricForPodLabels is the metric which returns the labels of removed and current pods in the cluster.
+	MetricForPodLabels string
+	// PodLabelPrefix is the name indicating the prefix for pod labels returned from the metric for pod labels.
+	PodLabelPrefix string
+	// PodNamespaceLabel is the label indicating the pod namespace.
+	PodNamespaceLabel string
+	// PodNameLabel is the name indicating the pod name.
+	PodNameLabel string
+	// ContainerNameLabel is the name indicating the container name.
+	ContainerNameLabel string
+	// ContainerNameLabel is the name indicating the pod name for a container.
+	ContainerPodNameLabel string
 }
 
 func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
@@ -284,6 +310,12 @@ func (v *vpa) reconcileRecommenderDeployment(deployment *appsv1.Deployment, serv
 		},
 	}
 
+	if prometheusHistoryProvider := v.values.Recommender.PrometheusHistoryProvider; prometheusHistoryProvider != nil {
+		deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
+			gardenerutils.NetworkPolicyLabel(prometheusHistoryProvider.ServiceName, 9090): v1beta1constants.LabelNetworkPolicyAllowed,
+		})
+	}
+
 	switch v.values.ClusterType {
 	case component.ClusterTypeSeed:
 		deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
@@ -320,7 +352,8 @@ func (v *vpa) reconcileRecommenderVPA(vpa *vpaautoscalingv1.VerticalPodAutoscale
 
 func (v *vpa) computeRecommenderArgs() []string {
 	out := []string{
-		"--v=3",
+		// Temporarily increase log level from 3 to 4 for the prometheus as history provider poc
+		"--v=4",
 		"--stderrthreshold=info",
 		"--pod-recommendation-min-cpu-millicores=5",
 		"--pod-recommendation-min-memory-mb=10",
@@ -346,6 +379,20 @@ func (v *vpa) computeRecommenderArgs() []string {
 
 	if v.values.ClusterType == component.ClusterTypeShoot {
 		out = append(out, "--kubeconfig="+gardenerutils.PathGenericKubeconfig)
+	}
+
+	if prometheusHistoryProvider := v.values.Recommender.PrometheusHistoryProvider; prometheusHistoryProvider != nil {
+		out = append(out, []string{
+			"--storage=prometheus",
+			"--prometheus-address=http://" + prometheusHistoryProvider.ServiceName + "." + prometheusHistoryProvider.Namespace + ".svc.cluster.local:" + strconv.Itoa(prometheusHistoryProvider.Port),
+			"--prometheus-cadvisor-job-name=" + prometheusHistoryProvider.CAdvisorJobName,
+			"--metric-for-pod-labels=" + prometheusHistoryProvider.MetricForPodLabels,
+			"--pod-namespace-label=" + prometheusHistoryProvider.PodNamespaceLabel,
+			"--pod-name-label=" + prometheusHistoryProvider.PodNameLabel,
+			"--container-name-label=" + prometheusHistoryProvider.ContainerNameLabel,
+			"--container-pod-name-label=" + prometheusHistoryProvider.ContainerPodNameLabel,
+			"--pod-label-prefix=" + prometheusHistoryProvider.PodLabelPrefix,
+		}...)
 	}
 
 	return out

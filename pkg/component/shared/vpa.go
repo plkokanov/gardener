@@ -68,6 +68,18 @@ func NewVerticalPodAutoscaler(
 				Image:                        imageRecommender.String(),
 				PriorityClassName:            priorityClassNameRecommender,
 				RecommendationMarginFraction: ptr.To(float64(0.05)),
+				PrometheusHistoryProvider: &vpa.PrometheusHistoryProvider{
+					ServiceName:           "prometheus-vpa",
+					Namespace:             gardenNamespaceName,
+					Port:                  80,
+					CAdvisorJobName:       "cadvisor",
+					MetricForPodLabels:    "kube_pod_labels{job=\"kube-state-metrics\"}[8d]",
+					PodLabelPrefix:        "label_",
+					PodNamespaceLabel:     "namespace",
+					PodNameLabel:          "pod",
+					ContainerNameLabel:    "container",
+					ContainerPodNameLabel: "pod",
+				},
 			},
 			Updater: vpa.ValuesUpdater{
 				EvictionTolerance:      ptr.To(float64(1.0)),
