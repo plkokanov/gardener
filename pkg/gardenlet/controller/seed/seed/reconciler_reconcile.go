@@ -414,10 +414,35 @@ func (r *Reconciler) runReconcileSeedFlow(
 		})
 
 		// When the seed is the garden cluster then the following components are reconciled by the gardener-operator.
+
+		deployVPARecommenderKubeStateMetrics = g.Add(flow.Task{
+			Name:         "Deploying kube-state-metrics for vpa-recommender",
+			Fn:           c.vpaRecommenderKubeStateMetrics.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			SkipIf:       seedIsGarden,
+		})
+		waitUntilVPARecommenderKubeStateMetricsDeployed = g.Add(flow.Task{
+			Name:         "Waiting until kube-state-metrics for vpa-recommender deployed",
+			Fn:           c.vpaRecommenderKubeStateMetrics.Wait,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, deployVPARecommenderKubeStateMetrics),
+			SkipIf:       seedIsGarden,
+		})
+		deployVPARecommenderHistoryProviderPrometheus = g.Add(flow.Task{
+			Name:         "Deploying Prometheus for vpa-recommender historical metrics",
+			Fn:           c.vpaRecommenderHistoryProviderPrometheus.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, waitUntilVPARecommenderKubeStateMetricsDeployed),
+			SkipIf:       seedIsGarden,
+		})
+		waitUntilVPARecommenderHistoryProviderPrometheusDeployed = g.Add(flow.Task{
+			Name:         "Waiting until Prometheus for vpa-recommender historical metrics is ready",
+			Fn:           c.vpaRecommenderHistoryProviderPrometheus.Wait,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			SkipIf:       seedIsGarden,
+		})
 		_ = g.Add(flow.Task{
 			Name:         "Deploying Kubernetes vertical pod autoscaler",
 			Fn:           c.verticalPodAutoscaler.Deploy,
-			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, deployVPARecommenderHistoryProviderPrometheus, waitUntilVPARecommenderHistoryProviderPrometheusDeployed),
 			SkipIf:       seedIsGarden,
 		})
 		_ = g.Add(flow.Task{

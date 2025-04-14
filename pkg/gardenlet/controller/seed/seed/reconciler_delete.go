@@ -203,6 +203,18 @@ func (r *Reconciler) runDeleteSeedFlow(
 			Fn:     component.OpDestroyAndWait(c.verticalPodAutoscaler).Destroy,
 			SkipIf: seedIsGarden,
 		})
+		destroyVPARecommenderPrometheus = g.Add(flow.Task{
+			Name:         "Destroying vpa-recommender history provider Prometheus",
+			Fn:           c.vpaRecommenderHistoryProviderPrometheus.Destroy,
+			SkipIf:       seedIsGarden,
+			Dependencies: flow.NewTaskIDs(destroyVPA),
+		})
+		destroyKubeStateMetricsForVPARecommender = g.Add(flow.Task{
+			Name:         "Destroying kube-state-metrics for vpa-recommender",
+			Fn:           component.OpDestroyAndWait(c.vpaRecommenderKubeStateMetrics).Destroy,
+			SkipIf:       seedIsGarden,
+			Dependencies: flow.NewTaskIDs(destroyVPA),
+		})
 		destroyKubeStateMetrics = g.Add(flow.Task{
 			Name: "Destroy kube-state-metrics",
 			Fn:   component.OpDestroyAndWait(c.kubeStateMetrics).Destroy,
@@ -251,6 +263,7 @@ func (r *Reconciler) runDeleteSeedFlow(
 			destroyCachePrometheus,
 			destroySeedPrometheus,
 			destroyAggregatePrometheus,
+			destroyVPARecommenderPrometheus,
 			destroyAlertManager,
 			destroyNginxIngress,
 			destroyClusterAutoscaler,
@@ -264,6 +277,7 @@ func (r *Reconciler) runDeleteSeedFlow(
 			destroyFluentOperatorResources,
 			destroyPrometheusOperator,
 			destroyPlutono,
+			destroyKubeStateMetricsForVPARecommender,
 			destroyKubeStateMetrics,
 			destroyEtcdDruid,
 			destroyVPA,

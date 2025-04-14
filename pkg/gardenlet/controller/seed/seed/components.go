@@ -61,6 +61,7 @@ import (
 	aggregateprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/aggregate"
 	cacheprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/cache"
 	seedprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/seed"
+	vpaseedprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpaseed"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheusoperator"
 	"github.com/gardener/gardener/pkg/component/observability/plutono"
 	seedsystem "github.com/gardener/gardener/pkg/component/seed/system"
@@ -106,17 +107,19 @@ type components struct {
 	kubeAPIServerIngress component.Deployer
 	ingressDNSRecord     component.DeployWaiter
 
-	fluentOperator                component.DeployWaiter
-	fluentBit                     component.DeployWaiter
-	fluentOperatorCustomResources component.DeployWaiter
-	plutono                       plutono.Interface
-	vali                          component.Deployer
-	kubeStateMetrics              component.DeployWaiter
-	prometheusOperator            component.DeployWaiter
-	cachePrometheus               component.DeployWaiter
-	seedPrometheus                component.DeployWaiter
-	aggregatePrometheus           component.DeployWaiter
-	alertManager                  component.DeployWaiter
+	fluentOperator                          component.DeployWaiter
+	fluentBit                               component.DeployWaiter
+	fluentOperatorCustomResources           component.DeployWaiter
+	plutono                                 plutono.Interface
+	vali                                    component.Deployer
+	kubeStateMetrics                        component.DeployWaiter
+	vpaRecommenderKubeStateMetrics          component.DeployWaiter
+	prometheusOperator                      component.DeployWaiter
+	cachePrometheus                         component.DeployWaiter
+	seedPrometheus                          component.DeployWaiter
+	aggregatePrometheus                     component.DeployWaiter
+	vpaRecommenderHistoryProviderPrometheus component.DeployWaiter
+	alertManager                            component.DeployWaiter
 }
 
 func (r *Reconciler) instantiateComponents(
@@ -232,6 +235,10 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
+	c.vpaRecommenderKubeStateMetrics, err = r.newVPARecommenderKubeStateMetrics()
+	if err != nil {
+		return
+	}
 	c.prometheusOperator, err = r.newPrometheusOperator()
 	if err != nil {
 		return
@@ -249,6 +256,10 @@ func (r *Reconciler) instantiateComponents(
 		return
 	}
 	c.aggregatePrometheus, err = r.newAggregatePrometheus(log, seed, seedIsGarden, secretsManager, globalMonitoringSecretSeed, wildCardCertSecret, alertingSMTPSecret)
+	if err != nil {
+		return
+	}
+	c.vpaRecommenderHistoryProviderPrometheus, err = r.newVPARecommenderHistoryProviderPrometheus(log, seed, isManagedSeed)
 	if err != nil {
 		return
 	}
@@ -649,6 +660,31 @@ func (r *Reconciler) newAggregatePrometheus(log logr.Logger, seed *seedpkg.Seed,
 	return sharedcomponent.NewPrometheus(log, r.SeedClientSet.Client(), r.GardenNamespace, values)
 }
 
+func (r *Reconciler) newVPARecommenderHistoryProviderPrometheus(log logr.Logger, seed *seedpkg.Seed, isManagedSeed bool) (component.DeployWaiter, error) {
+	additionalScrapeConfigs, err := vpaseedprometheus.AdditionalScrapeConfigs(isManagedSeed)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting additional scrape configs: %w", err)
+	}
+
+	return sharedcomponent.NewPrometheus(log, r.SeedClientSet.Client(), r.GardenNamespace, prometheus.Values{
+		Name:              "vpa-seed",
+		PriorityClassName: v1beta1constants.PriorityClassNameSeedSystem600,
+		StorageCapacity:   resource.MustParse(seed.GetValidVolumeSize("4Gi")),
+		Replicas:          1,
+		Retention:         ptr.To(monitoringv1.Duration("8d")),
+		RetentionSize:     "3GB",
+		AdditionalPodLabels: map[string]string{
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+		},
+		CentralConfigs: prometheus.CentralConfigs{
+			AdditionalScrapeConfigs: additionalScrapeConfigs,
+		},
+		AdditionalResources: []client.Object{
+			vpaseedprometheus.NetworkPolicyToKubelet(r.GardenNamespace, seed.GetNodeCIDR()),
+		},
+	})
+}
+
 func (r *Reconciler) newAlertmanager(log logr.Logger, seed *seedpkg.Seed, alertingSMTPSecret *corev1.Secret) (component.DeployWaiter, error) {
 	c, err := sharedcomponent.NewAlertmanager(log, r.SeedClientSet.Client(), r.GardenNamespace, alertmanager.Values{
 		Name:               "seed",
@@ -749,6 +785,16 @@ func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
 		r.SeedVersion,
 		v1beta1constants.PriorityClassNameSeedSystem600,
 		kubestatemetrics.SuffixSeed,
+	)
+}
+
+func (r *Reconciler) newVPARecommenderKubeStateMetrics() (component.DeployWaiter, error) {
+	return sharedcomponent.NewKubeStateMetrics(
+		r.SeedClientSet.Client(),
+		r.GardenNamespace,
+		r.SeedVersion,
+		v1beta1constants.PriorityClassNameSeedSystem600,
+		kubestatemetrics.SuffixVPA,
 	)
 }
 
