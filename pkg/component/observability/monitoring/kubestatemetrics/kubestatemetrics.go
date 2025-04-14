@@ -19,6 +19,7 @@ import (
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 const (
@@ -38,6 +39,8 @@ const (
 	SuffixSeed = "-seed"
 	// SuffixRuntime is the suffix for garden-runtime kube-state-metrics resources.
 	SuffixRuntime = "-runtime"
+	// PrefixVPA is the prefix for the vpa kube-state-metrics resources.
+	PrefixVPA = "-vpa"
 )
 
 // New creates a new instance of DeployWaiter for the kube-state-metrics.
@@ -74,20 +77,31 @@ type Values struct {
 	Replicas int32
 	// NameSuffix is attached to the deployment name and related resources.
 	NameSuffix string
+	// NamePrefix is prepended to the deployment name and related resources.
+	NamePrefix string
 	// UsePrometheusHistoryProviderForVPARecommender determines whether vpa will use prometheus history provider.
 	UsePrometheusHistoryProviderForVPARecommender bool
 }
 
 func (k *kubeStateMetrics) getResourcesForSeed() ([]client.Object, error) {
-	customResourceStateConfigMap, err := k.customResourceStateConfigMap()
-	if err != nil {
-		return nil, err
+	var (
+		customResourceStateConfigMap     *corev1.ConfigMap
+		customResourceStateConfigMapName string
+		err                              error
+	)
+
+	if k.values.NamePrefix != PrefixVPA {
+		customResourceStateConfigMap, err = k.customResourceStateConfigMap()
+		if err != nil {
+			return nil, err
+		}
+		customResourceStateConfigMapName = customResourceStateConfigMap.Name
 	}
 
 	var (
 		clusterRole    = k.clusterRole()
 		serviceAccount = k.serviceAccount()
-		deployment     = k.deployment(serviceAccount, "", nil, customResourceStateConfigMap.Name)
+		deployment     = k.deployment(serviceAccount, "", nil, customResourceStateConfigMapName)
 		resources      = []client.Object{
 			clusterRole,
 			serviceAccount,
@@ -118,15 +132,27 @@ func (k *kubeStateMetrics) getResourcesForSeed() ([]client.Object, error) {
 }
 
 func (k *kubeStateMetrics) getResourcesForShoot(genericTokenKubeconfigSecretName string, shootAccessSecret *gardenerutils.AccessSecret) ([]client.Object, error) {
-	customResourceStateConfigMap, err := k.customResourceStateConfigMap()
-	if err != nil {
-		return nil, err
+	var (
+		customResourceStateConfigMap     *corev1.ConfigMap
+		customResourceStateConfigMapName string
+		prometheusRule                   *monitoringv1.PrometheusRule
+		err                              error
+	)
+
+	if k.values.NamePrefix != PrefixVPA {
+		customResourceStateConfigMap, err = k.customResourceStateConfigMap()
+		if err != nil {
+			return nil, err
+		}
+		customResourceStateConfigMapName = customResourceStateConfigMap.Name
+
+		prometheusRule = k.prometheusRuleShoot()
 	}
 
-	deployment := k.deployment(nil, genericTokenKubeconfigSecretName, shootAccessSecret, customResourceStateConfigMap.Name)
+	deployment := k.deployment(nil, genericTokenKubeconfigSecretName, shootAccessSecret, customResourceStateConfigMapName)
 	return []client.Object{
 		deployment,
-		k.prometheusRuleShoot(),
+		prometheusRule,
 		k.scrapeConfigShoot(),
 		k.service(),
 		k.verticalPodAutoscaler(deployment),
@@ -151,6 +177,8 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 	var (
 		shootAccessSecret *gardenerutils.AccessSecret
 		registry          = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+		err               error
+		resources         []client.Object
 	)
 
 	if k.values.ClusterType == component.ClusterTypeShoot {
@@ -164,7 +192,7 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 			return err
 		}
 
-		resources, err := k.getResourcesForShoot(genericTokenKubeconfigSecret.Name, shootAccessSecret)
+		resources, err = k.getResourcesForShoot(genericTokenKubeconfigSecret.Name, shootAccessSecret)
 		if err != nil {
 			return err
 		}
@@ -175,7 +203,7 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 	}
 
 	if k.values.ClusterType == component.ClusterTypeSeed {
-		resources, err := k.getResourcesForSeed()
+		resources, err = k.getResourcesForSeed()
 		if err != nil {
 			return err
 		}
@@ -260,7 +288,7 @@ func (k *kubeStateMetrics) WaitCleanup(ctx context.Context) error {
 
 func (k *kubeStateMetrics) managedResourceName() string {
 	if k.values.ClusterType == component.ClusterTypeSeed {
-		return managedResourceName + k.values.NameSuffix
+		return k.values.NamePrefix + managedResourceName + k.values.NameSuffix
 	}
-	return managedResourceNameShoot + k.values.NameSuffix
+	return k.values.NamePrefix + managedResourceNameShoot + k.values.NameSuffix
 }
