@@ -34,6 +34,28 @@ func (b *Botanist) DefaultKubeStateMetrics() (component.DeployWaiter, error) {
 	), nil
 }
 
+// KubeStateMetricsForVPARecommender returns a deployer for the kube-state-metrics to be used by vpa-recommender when configured
+// with prometheus as history provider.
+func (b *Botanist) KubeStateMetricsForVPARecommender() (component.DeployWaiter, error) {
+	image, err := imagevector.Containers().FindImage(imagevector.ContainerImageNameKubeStateMetrics, imagevectorutils.RuntimeVersion(b.SeedVersion()), imagevectorutils.TargetVersion(b.ShootVersion()))
+	if err != nil {
+		return nil, err
+	}
+
+	return kubestatemetrics.New(
+		b.SeedClientSet.Client(),
+		b.Shoot.ControlPlaneNamespace,
+		b.SecretsManager,
+		kubestatemetrics.Values{
+			ClusterType:       component.ClusterTypeShoot,
+			Image:             image.String(),
+			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane100,
+			Replicas:          b.Shoot.GetReplicas(1),
+			NameSuffix:        kubestatemetrics.SuffixVPA,
+		},
+	), nil
+}
+
 // DeployKubeStateMetrics deploys or destroys the kube-state-metrics to the shoot namespace in the seed.
 func (b *Botanist) DeployKubeStateMetrics(ctx context.Context) error {
 	if !b.IsShootMonitoringEnabled() {

@@ -357,6 +357,11 @@ func (r *Reconciler) runDeleteShootFlow(ctx context.Context, o *operation.Operat
 			SkipIf:       !cleanupShootResources,
 			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, deployCloudProviderSecret, waitUntilControlPlaneReady, initializeShootClients),
 		})
+		deletePrometheusForVPARecommender = g.Add(flow.Task{
+			Name:         "Deleting Prometheus for vpa-recommender history metrics",
+			Fn:           flow.TaskFn(botanist.DestroyPrometheusForVPARecommender).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Dependencies: flow.NewTaskIDs(initializeShootClients),
+		})
 		_ = g.Add(flow.Task{
 			Name:         "Scaling up Kubernetes controller manager",
 			Fn:           botanist.ScaleKubeControllerManagerToOne,
@@ -699,6 +704,7 @@ func (r *Reconciler) runDeleteShootFlow(ctx context.Context, o *operation.Operat
 		syncPoint = flow.NewTaskIDs(
 			deleteAlertmanager,
 			deletePrometheus,
+			deletePrometheusForVPARecommender,
 			deleteBlackboxExporter,
 			deletePlutono,
 			destroySeedLogging,

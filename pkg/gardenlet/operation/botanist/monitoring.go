@@ -15,10 +15,12 @@ import (
 	"k8s.io/utils/ptr"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/alertmanager"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus"
 	shootprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/shoot"
+	vpashootprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpashoot"
 	sharedcomponent "github.com/gardener/gardener/pkg/component/shared"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -143,6 +145,37 @@ func (b *Botanist) DefaultPrometheus() (prometheus.Interface, error) {
 	return sharedcomponent.NewPrometheus(b.Logger, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, values)
 }
 
+// PrometheusForVPA creates a prometheus to be used as history provider for vpa recommender.
+func (b *Botanist) PrometheusForVPARecommender() (prometheus.Interface, error) {
+	values := prometheus.Values{
+		Name:                "vpa",
+		PriorityClassName:   v1beta1constants.PriorityClassNameShootControlPlane100,
+		StorageCapacity:     resource.MustParse(b.Seed.GetValidVolumeSize("6Gi")),
+		ClusterType:         component.ClusterTypeShoot,
+		Replicas:            b.Shoot.GetReplicas(1),
+		Retention:           ptr.To(monitoringv1.Duration("8d")),
+		RetentionSize:       "4GB",
+		RestrictToNamespace: true,
+		ResourceRequests: &corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("10m"),
+			corev1.ResourceMemory: resource.MustParse("400M"),
+		},
+		AdditionalPodLabels: map[string]string{
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+		},
+		// These additional annotations are probably not necessary
+		AdditionalServiceAnnotations: map[string]string{
+			resourcesv1alpha1.NetworkingFromWorldToPorts: `[{"protocol":"TCP","port":9090}]`,
+		},
+		TargetCluster: &prometheus.TargetClusterValues{
+			ServiceAccountName: vpashootprometheus.ServiceAccountName,
+			ScrapesMetrics:     true,
+		},
+	}
+
+	return sharedcomponent.NewPrometheus(b.Logger, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, values)
+}
+
 // DeployPrometheus reconciles the shoot Prometheus.
 func (b *Botanist) DeployPrometheus(ctx context.Context) error {
 	if !b.IsShootMonitoringEnabled() {
@@ -171,6 +204,21 @@ func (b *Botanist) DeployPrometheus(ctx context.Context) error {
 	return b.Shoot.Components.ControlPlane.Prometheus.Deploy(ctx)
 }
 
+// DeployPrometheusForVPARecommender deploys the Prometheus used as history provider for vpa-recommender.
+func (b *Botanist) DeployPrometheusForVPARecommender(ctx context.Context) error {
+	if err := gardenerutils.NewShootAccessSecret(vpashootprometheus.AccessSecretName, b.Shoot.ControlPlaneNamespace).Reconcile(ctx, b.SeedClientSet.Client()); err != nil {
+		return fmt.Errorf("failed reconciling access secret for prometheus: %w", err)
+	}
+
+	caSecret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCACluster)
+	if !found {
+		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameCACluster)
+	}
+	b.Shoot.Components.ControlPlane.PrometheusForVPARecommender.SetCentralScrapeConfigs(vpashootprometheus.CentralScrapeConfigs(caSecret.Name))
+
+	return b.Shoot.Components.ControlPlane.PrometheusForVPARecommender.Deploy(ctx)
+}
+
 // DestroyPrometheus destroys the shoot Prometheus.
 func (b *Botanist) DestroyPrometheus(ctx context.Context) error {
 	if err := b.Shoot.Components.ControlPlane.Prometheus.Destroy(ctx); err != nil {
@@ -178,4 +226,13 @@ func (b *Botanist) DestroyPrometheus(ctx context.Context) error {
 	}
 
 	return kubernetesutils.DeleteObject(ctx, b.SeedClientSet.Client(), gardenerutils.NewShootAccessSecret(shootprometheus.AccessSecretName, b.Shoot.ControlPlaneNamespace).Secret)
+}
+
+// DestroyPrometheus destroys the Prometheus used as history provider for vpa-recommender.
+func (b *Botanist) DestroyPrometheusForVPARecommender(ctx context.Context) error {
+	if err := b.Shoot.Components.ControlPlane.PrometheusForVPARecommender.Destroy(ctx); err != nil {
+		return err
+	}
+
+	return kubernetesutils.DeleteObject(ctx, b.SeedClientSet.Client(), gardenerutils.NewShootAccessSecret(vpashootprometheus.AccessSecretName, b.Shoot.ControlPlaneNamespace).Secret)
 }

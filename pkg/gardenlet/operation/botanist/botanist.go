@@ -108,11 +108,19 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	if err != nil {
 		return nil, err
 	}
+	o.Shoot.Components.ControlPlane.KubeStateMetricsForVPARecommender, err = b.KubeStateMetricsForVPARecommender()
+	if err != nil {
+		return nil, err
+	}
 	o.Shoot.Components.ControlPlane.Plutono, err = b.DefaultPlutono()
 	if err != nil {
 		return nil, err
 	}
 	o.Shoot.Components.ControlPlane.Prometheus, err = b.DefaultPrometheus()
+	if err != nil {
+		return nil, err
+	}
+	o.Shoot.Components.ControlPlane.PrometheusForVPARecommender, err = b.PrometheusForVPARecommender()
 	if err != nil {
 		return nil, err
 	}
