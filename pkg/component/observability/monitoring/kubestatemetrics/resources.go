@@ -172,6 +172,7 @@ func (k *kubeStateMetrics) deployment(
 			fmt.Sprintf("--port=%d", port),
 			"--telemetry-port=8081",
 		}
+		extraArgs []string
 	)
 
 	customResourceStateConfigFile := customResourceStateConfigMountDir + "/" + customResourceStateConfigMountFile
@@ -190,13 +191,13 @@ func (k *kubeStateMetrics) deployment(
 			metricAllowlist = strings.Join(gardenMetricAllowlist, ",")
 		}
 
-		args = append(args,
+		extraArgs = []string{
 			"--resources=deployments,pods,statefulsets,nodes,horizontalpodautoscalers,persistentvolumeclaims,replicasets,namespaces",
 			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
 			"--metric-annotations-allowlist=namespaces=[shoot.gardener.cloud/uid]",
-			"--metric-allowlist="+metricAllowlist,
-			"--custom-resource-state-config-file="+customResourceStateConfigFile,
-		)
+			"--metric-allowlist=" + metricAllowlist,
+			"--custom-resource-state-config-file=" + customResourceStateConfigFile,
+		}
 	}
 
 	if k.values.ClusterType == component.ClusterTypeShoot {
@@ -205,14 +206,27 @@ func (k *kubeStateMetrics) deployment(
 			gardenerutils.NetworkPolicyLabel(v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
 		})
 		args = append(args,
-			"--resources=daemonsets,deployments,nodes,pods,statefulsets,replicasets",
-			"--namespaces="+metav1.NamespaceSystem,
 			"--kubeconfig="+gardenerutils.PathGenericKubeconfig,
-			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
-			"--metric-allowlist="+strings.Join(shootMetricAllowlist, ","),
-			"--custom-resource-state-config-file="+customResourceStateConfigFile,
 		)
+
+		extraArgs = []string{
+			"--resources=daemonsets,deployments,nodes,pods,statefulsets,replicasets",
+			"--namespaces=" + metav1.NamespaceSystem,
+			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
+			"--metric-allowlist=" + strings.Join(shootMetricAllowlist, ","),
+			"--custom-resource-state-config-file=" + customResourceStateConfigFile,
+		}
 	}
+
+	if k.values.NameSuffix == SuffixVPA || k.values.NameSuffix == SuffixVPARuntime {
+		extraArgs = []string{
+			"--resources=pods",
+			"--metric-allowlist=^kube_pod_labels$",
+			"--metric-labels-allowlist=pods=[*]",
+		}
+	}
+
+	args = append(args, extraArgs...)
 
 	deployment.Labels = deploymentLabels
 	deployment.Spec.Replicas = &k.values.Replicas
@@ -271,24 +285,28 @@ func (k *kubeStateMetrics) deployment(
 				SecurityContext: &corev1.SecurityContext{
 					AllowPrivilegeEscalation: ptr.To(false),
 				},
-				VolumeMounts: []corev1.VolumeMount{{
-					Name:      customResourceStateConfigMapName,
-					MountPath: customResourceStateConfigMountDir,
-					ReadOnly:  true,
-				}},
 			}},
 			PriorityClassName: k.values.PriorityClassName,
-			Volumes: []corev1.Volume{{
-				Name: customResourceStateConfigMapName,
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: customResourceStateConfigMapName,
-						},
+		},
+	}
+
+	if customResourceStateConfigMapName != "" {
+		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      customResourceStateConfigMapName,
+			MountPath: customResourceStateConfigMountDir,
+			ReadOnly:  true,
+		})
+
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: customResourceStateConfigMapName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: customResourceStateConfigMapName,
 					},
 				},
-			}},
-		},
+			},
+		})
 	}
 
 	if k.values.ClusterType == component.ClusterTypeSeed {
@@ -619,6 +637,13 @@ func (k *kubeStateMetrics) scrapeConfigShoot() *monitoringv1alpha1.ScrapeConfig 
 	return scrapeConfig
 }
 
+func (k *kubeStateMetrics) scrapeConfigVPARecommender(prometheusName string) *monitoringv1alpha1.ScrapeConfig {
+	scrapeConfig := &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics"+k.values.NameSuffix, k.namespace, prometheusName)}
+	scrapeConfig.Labels = monitoringutils.Labels(prometheusName)
+	scrapeConfig.Spec = k.standardScrapeConfigSpec()
+	return scrapeConfig
+}
+
 func (k *kubeStateMetrics) prometheusRuleShoot() *monitoringv1.PrometheusRule {
 	prometheusRule := &monitoringv1.PrometheusRule{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics"+k.values.NameSuffix, k.namespace, shoot.Label)}
 	rules := []monitoringv1.Rule{
@@ -709,7 +734,7 @@ func (k *kubeStateMetrics) getLabels() map[string]string {
 
 func (k *kubeStateMetrics) nameSuffix() string {
 	suffix := "kube-state-metrics"
-	if k.values.ClusterType == component.ClusterTypeShoot {
+	if k.values.ClusterType == component.ClusterTypeShoot && k.values.NameSuffix != SuffixVPA {
 		return suffix
 	}
 	return suffix + k.values.NameSuffix

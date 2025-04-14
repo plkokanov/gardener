@@ -16,6 +16,9 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpagarden"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpaseed"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpashoot"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
@@ -38,6 +41,10 @@ const (
 	SuffixSeed = "-seed"
 	// SuffixRuntime is the suffix for garden-runtime kube-state-metrics resources.
 	SuffixRuntime = "-runtime"
+	// SuffixVPA is the suffix for the vpa kube-state-metrics resources.
+	SuffixVPA = "-vpa"
+	// SuffixVPARuntime is the suffix for the vpa kube-state-metrics resource in the runtime cluster
+	SuffixVPARuntime = "-vpa-runtime"
 )
 
 // New creates a new instance of DeployWaiter for the kube-state-metrics.
@@ -115,6 +122,49 @@ func (k *kubeStateMetrics) getResourcesForSeed() ([]client.Object, error) {
 	return resources, nil
 }
 
+func (k *kubeStateMetrics) getResourcesForSeedVPARecommender() []client.Object {
+	var (
+		clusterRole    = k.clusterRole()
+		serviceAccount = k.serviceAccount()
+		deployment     = k.deployment(serviceAccount, "", nil, "")
+		resources      = []client.Object{
+			clusterRole,
+			serviceAccount,
+			k.clusterRoleBinding(clusterRole, serviceAccount),
+			deployment,
+			k.podDisruptionBudget(deployment),
+			k.service(),
+			k.verticalPodAutoscaler(deployment),
+		}
+	)
+
+	switch k.values.NameSuffix {
+	case SuffixVPA:
+		resources = append(
+			resources,
+			k.scrapeConfigVPARecommender(vpaseed.Label),
+		)
+	case SuffixVPARuntime:
+		resources = append(
+			resources,
+			k.scrapeConfigVPARecommender(vpagarden.Label),
+		)
+	}
+
+	return resources
+}
+
+func (k *kubeStateMetrics) getResourcesForShootVPARecommender(genericTokenKubeconfigSecretName string, shootAccessSecret *gardenerutils.AccessSecret) []client.Object {
+	deployment := k.deployment(nil, genericTokenKubeconfigSecretName, shootAccessSecret, "")
+
+	return []client.Object{
+		deployment,
+		k.scrapeConfigVPARecommender(vpashoot.Label),
+		k.service(),
+		k.verticalPodAutoscaler(deployment),
+	}
+}
+
 func (k *kubeStateMetrics) getResourcesForShoot(genericTokenKubeconfigSecretName string, shootAccessSecret *gardenerutils.AccessSecret) ([]client.Object, error) {
 	customResourceStateConfigMap, err := k.customResourceStateConfigMap()
 	if err != nil {
@@ -149,6 +199,8 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 	var (
 		shootAccessSecret *gardenerutils.AccessSecret
 		registry          = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+		err               error
+		resources         []client.Object
 	)
 
 	if k.values.ClusterType == component.ClusterTypeShoot {
@@ -162,9 +214,13 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 			return err
 		}
 
-		resources, err := k.getResourcesForShoot(genericTokenKubeconfigSecret.Name, shootAccessSecret)
-		if err != nil {
-			return err
+		if k.values.NameSuffix == SuffixVPA {
+			resources = k.getResourcesForShootVPARecommender(genericTokenKubeconfigSecret.Name, shootAccessSecret)
+		} else {
+			resources, err = k.getResourcesForShoot(genericTokenKubeconfigSecret.Name, shootAccessSecret)
+			if err != nil {
+				return err
+			}
 		}
 
 		if err := registry.Add(resources...); err != nil {
@@ -173,9 +229,13 @@ func (k *kubeStateMetrics) Deploy(ctx context.Context) error {
 	}
 
 	if k.values.ClusterType == component.ClusterTypeSeed {
-		resources, err := k.getResourcesForSeed()
-		if err != nil {
-			return err
+		if k.values.NameSuffix == SuffixVPA || k.values.NameSuffix == SuffixVPARuntime {
+			resources = k.getResourcesForSeedVPARecommender()
+		} else {
+			resources, err = k.getResourcesForSeed()
+			if err != nil {
+				return err
+			}
 		}
 
 		if err := registry.Add(resources...); err != nil {
