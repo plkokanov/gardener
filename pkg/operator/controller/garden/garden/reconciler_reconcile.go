@@ -191,9 +191,29 @@ func (r *Reconciler) reconcile(
 			Name: "Deploying nginx-ingress controller",
 			Fn:   c.nginxIngressController.Deploy,
 		})
+		deployKubeStateMetricsForVPARecommender = g.Add(flow.Task{
+			Name: "Deploying kube-state-metrics for vpa-recommender",
+			Fn:   c.kubeStateMetricsForVPARecommender.Deploy,
+		})
+		waitUntilKubeStateMetricsForVPARecommenderDeployed = g.Add(flow.Task{
+			Name:         "Waiting until kube-state-metrics for vpa-recommender is deployed",
+			Fn:           c.kubeStateMetricsForVPARecommender.Wait,
+			Dependencies: flow.NewTaskIDs(deployKubeStateMetricsForVPARecommender),
+		})
+		deployPrometheusForVPARecommender = g.Add(flow.Task{
+			Name:         "Deploying prometheus for vpa-recommender",
+			Fn:           c.prometheusForVPARecommender.Deploy,
+			Dependencies: flow.NewTaskIDs(waitUntilKubeStateMetricsForVPARecommenderDeployed),
+		})
+		waitUntilPrometheusForVPARecommenderDeployed = g.Add(flow.Task{
+			Name:         "Waiting until prometheus for vpa-recommender is deployed",
+			Fn:           c.prometheusForVPARecommender.Wait,
+			Dependencies: flow.NewTaskIDs(deployPrometheusForVPARecommender),
+		})
 		deployVPA = g.Add(flow.Task{
-			Name: "Deploying Kubernetes vertical pod autoscaler",
-			Fn:   c.verticalPodAutoscaler.Deploy,
+			Name:         "Deploying Kubernetes vertical pod autoscaler",
+			Fn:           c.verticalPodAutoscaler.Deploy,
+			Dependencies: flow.NewTaskIDs(waitUntilPrometheusForVPARecommenderDeployed),
 		})
 		deployEtcdDruid = g.Add(flow.Task{
 			Name: "Deploying ETCD Druid",
