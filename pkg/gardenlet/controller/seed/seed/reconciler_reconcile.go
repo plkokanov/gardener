@@ -414,10 +414,22 @@ func (r *Reconciler) runReconcileSeedFlow(
 		})
 
 		// When the seed is the garden cluster then the following components are reconciled by the gardener-operator.
+		deployCentralVPARecommenderHistoryProviderPrometheus = g.Add(flow.Task{
+			Name:         "Deploying Prometheus for vpa-recommender historical metrics",
+			Fn:           c.centralVPARecomemnderHistoryProviderPrometheus.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			SkipIf:       seedIsGarden,
+		})
+		waitUntilVPARecommenderHistoryProviderPrometheusDeployed = g.Add(flow.Task{
+			Name:         "Waiting until Prometheus for vpa-recommender historical metrics is ready",
+			Fn:           c.centralVPARecomemnderHistoryProviderPrometheus.Wait,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, deployCentralVPARecommenderHistoryProviderPrometheus),
+			SkipIf:       seedIsGarden,
+		})
 		_ = g.Add(flow.Task{
 			Name:         "Deploying Kubernetes vertical pod autoscaler",
 			Fn:           c.verticalPodAutoscaler.Deploy,
-			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, waitUntilVPARecommenderHistoryProviderPrometheusDeployed),
 			SkipIf:       seedIsGarden,
 		})
 		_ = g.Add(flow.Task{
