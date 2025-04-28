@@ -29,6 +29,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/garden"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/seed"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/shoot"
+	prometheusvparecommenderseed "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommenderseed"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -154,6 +155,7 @@ func (v *vpa) Deploy(ctx context.Context) error {
 			v1beta1constants.DeploymentNameVPAAdmissionController,
 			v1beta1constants.DeploymentNameVPARecommender,
 			v1beta1constants.DeploymentNameVPAUpdater,
+			prometheusvparecommenderseed.AccessSecretName,
 		} {
 			if err := gardenerutils.NewShootAccessSecret(name, v.namespace).Reconcile(ctx, v.client); err != nil {
 				return err

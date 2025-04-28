@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,10 +27,12 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
+	prometheusvparecommenderseed "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommenderseed"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 )
 
 const (
@@ -151,8 +154,16 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 			component.ResourceConfig{Obj: podDisruptionBudget, Class: component.Runtime, MutateFn: func() { v.reconcilePodDisruptionBudget(podDisruptionBudget, deployment) }},
 		)
 	} else {
-		vpa := v.emptyVerticalPodAutoscaler(recommender)
+		var (
+			vpa                        = v.emptyVerticalPodAutoscaler(recommender)
+			cadvisorScrapeConfig       = v.emptyCAdvisorScrapeConfig()
+			cadvisorClusterRole        = v.emptyClusterRole("vpa-recommender-cadvisor")
+			cadvisorCLusterRoleBinding = v.emptyClusterRoleBinding("vpa-recommender-cadvisor")
+		)
 		configs = append(configs,
+			component.ResourceConfig{Obj: cadvisorClusterRole, Class: component.Application, MutateFn: func() { v.reconcileCAdvisorClusterRole(cadvisorClusterRole) }},
+			component.ResourceConfig{Obj: cadvisorCLusterRoleBinding, Class: component.Application, MutateFn: func() { v.reconcileCAdvsiroClusterRoleBinding(cadvisorCLusterRoleBinding, cadvisorClusterRole) }},
+			component.ResourceConfig{Obj: cadvisorScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderHistoryProviderScrapeConfig(cadvisorScrapeConfig) }},
 			component.ResourceConfig{Obj: vpa, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderVPA(vpa, deployment) }},
 			component.ResourceConfig{Obj: deployment, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderDeployment(deployment, nil) }},
 			component.ResourceConfig{Obj: podDisruptionBudget, Class: component.Runtime, MutateFn: func() { v.reconcilePodDisruptionBudget(podDisruptionBudget, deployment) }},
@@ -160,6 +171,121 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 	}
 
 	return configs
+}
+
+func (v *vpa) reconcileCAdvisorClusterRole(clusterRole *rbacv1.ClusterRole) {
+	clusterRole.Rules = []rbacv1.PolicyRule{
+		{
+			NonResourceURLs: []string{"/metrics"},
+			Verbs:           []string{"get"},
+		},
+		{
+			APIGroups: []string{corev1.GroupName},
+			Resources: []string{"nodes"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{corev1.GroupName},
+			Resources: []string{"nodes/metrics", "nodes/proxy", "services/proxy"},
+			Verbs:     []string{"get"},
+		},
+	}
+}
+
+func (v *vpa) reconcileCAdvsiroClusterRoleBinding(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterRole *rbacv1.ClusterRole) {
+	clusterRoleBinding.RoleRef = rbacv1.RoleRef{
+		APIGroup: rbacv1.GroupName,
+		Kind:     "ClusterRole",
+		Name:     clusterRole.Name,
+	}
+	clusterRoleBinding.Subjects = []rbacv1.Subject{{
+		Kind:      rbacv1.ServiceAccountKind,
+		Name:      prometheusvparecommenderseed.ServiceAccountName,
+		Namespace: v.namespaceForApplicationClassResource(),
+	}}
+}
+
+func (v *vpa) emptyCAdvisorScrapeConfig() *monitoringv1alpha1.ScrapeConfig {
+	return &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("cadvisor", v.namespace, prometheusvparecommenderseed.Label)}
+}
+
+func (v *vpa) reconcileRecommenderHistoryProviderScrapeConfig(scrapeConfig *monitoringv1alpha1.ScrapeConfig) {
+	apiserverAddress := v1beta1constants.DeploymentNameKubeAPIServer + "." + v.namespace + ".svc.cluster.local"
+
+	scrapeConfig.Labels = monitoringutils.Labels(prometheusvparecommenderseed.Label)
+	scrapeConfig.Spec = monitoringv1alpha1.ScrapeConfigSpec{
+		HonorLabels:     ptr.To(false),
+		HonorTimestamps: ptr.To(false),
+		Scheme:          ptr.To("HTTPS"),
+		Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: prometheusvparecommenderseed.AccessSecretName},
+			Key:                  resourcesv1alpha1.DataKeyToken,
+		}},
+		TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
+			Key:                  secretsutils.DataKeyCertificateBundle,
+		}}},
+		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
+			Role:            monitoringv1alpha1.KubernetesRoleNode,
+			APIServer:       ptr.To("https://" + apiserverAddress + ":" + strconv.Itoa(kubeapiserverconstants.Port)),
+			Namespaces:      &monitoringv1alpha1.NamespaceDiscovery{Names: []string{metav1.NamespaceSystem}},
+			FollowRedirects: ptr.To(false),
+			Authorization: &monitoringv1.SafeAuthorization{Credentials: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: prometheusvparecommenderseed.AccessSecretName},
+				Key:                  resourcesv1alpha1.DataKeyToken,
+			}},
+			TLSConfig: &monitoringv1.SafeTLSConfig{CA: monitoringv1.SecretOrConfigMap{Secret: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: v.caSecretName},
+				Key:                  secretsutils.DataKeyCertificateBundle,
+			}}},
+		}},
+		RelabelConfigs: []monitoringv1.RelabelConfig{
+			{
+				Action:      "replace",
+				Replacement: ptr.To("cadvisor"),
+				TargetLabel: "job",
+			},
+			{
+				Action: "labelmap",
+				Regex:  `__meta_kubernetes_node_label_(.+)`,
+			},
+			{
+				TargetLabel: "__address__",
+				Replacement: ptr.To(apiserverAddress + ":" + strconv.Itoa(kubeapiserverconstants.Port)),
+			},
+			{
+				SourceLabels: []monitoringv1.LabelName{"__meta_kubernetes_node_name"},
+				Regex:        `(.+)`,
+				Replacement:  ptr.To(`/api/v1/nodes/${1}/proxy/metrics/cadvisor`),
+				TargetLabel:  "__metrics_path__",
+			},
+			{
+				TargetLabel: "type",
+				Replacement: ptr.To("shoot"),
+			},
+		},
+		MetricRelabelConfigs: []monitoringv1.RelabelConfig{
+			monitoringutils.StandardMetricRelabelConfig(
+				"container_cpu_usage_seconds_total",
+				"container_memory_working_set_bytes",
+			)[0],
+			{
+				SourceLabels: []monitoringv1.LabelName{"container", "__name__"},
+				Action:       "drop",
+				// The system container POD is used for networking
+				Regex: `POD;(container_cpu_usage_seconds_total|container_memory_working_set_bytes)`,
+			},
+			{
+				SourceLabels: []monitoringv1.LabelName{"__name__", "container", "interface"},
+				Action:       "drop",
+				Regex:        `container_network.+;POD;(.{5,}|tun0|en.+)`,
+			},
+			{
+				Regex:  `^id$`,
+				Action: "labeldrop",
+			},
+		},
+	}
 }
 
 func (v *vpa) reconcileRecommenderServiceAccount(serviceAccount *corev1.ServiceAccount) {
