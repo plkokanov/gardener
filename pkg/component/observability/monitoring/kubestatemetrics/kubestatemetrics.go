@@ -16,9 +16,8 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component"
-	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpagarden"
-	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpaseed"
-	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vpashoot"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommendergarden"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommenderseed"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
@@ -142,12 +141,12 @@ func (k *kubeStateMetrics) getResourcesForSeedVPARecommender() []client.Object {
 	case SuffixVPA:
 		resources = append(
 			resources,
-			k.scrapeConfigVPARecommender(vpaseed.Label),
+			k.scrapeConfigVPARecommender(vparecommenderseed.Label),
 		)
 	case SuffixVPARuntime:
 		resources = append(
 			resources,
-			k.scrapeConfigVPARecommender(vpagarden.Label),
+			k.scrapeConfigVPARecommender(vparecommendergarden.Label),
 		)
 	}
 
@@ -159,7 +158,7 @@ func (k *kubeStateMetrics) getResourcesForShootVPARecommender(genericTokenKubeco
 
 	return []client.Object{
 		deployment,
-		k.scrapeConfigVPARecommender(vpashoot.Label),
+		k.scrapeConfigVPARecommender(vparecommenderseed.Label),
 		k.service(),
 		k.verticalPodAutoscaler(deployment),
 	}

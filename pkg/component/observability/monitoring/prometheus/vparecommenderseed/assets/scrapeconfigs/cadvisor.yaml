@@ -1,0 +1,43 @@
+job_name: cadvisor
+honor_timestamps: false
+honor_labels: false
+scheme: https
+metrics_path: /metrics/cadvisor
+
+tls_config:
+  ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+  insecure_skip_verify: {{.IsManagedSeed}}
+bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+
+kubernetes_sd_configs:
+- role: node
+relabel_configs:
+- source_labels: [__meta_kubernetes_node_address_InternalIP]
+  target_label: instance
+- action: labelmap
+  regex: __meta_kubernetes_node_label_(.+)
+- target_label: type
+  replacement: seed
+
+metric_relabel_configs:
+- source_labels: [__name__]
+  action: keep
+  regex: ^(container_cpu_usage_seconds_total|container_memory_usage_bytes)$
+- source_labels:
+  - container
+  - __name__
+  # The system container POD is used for networking
+  regex: POD;(container_cpu_usage_seconds_total|container_memory_usage_bytes)
+  action: drop
+- source_labels: [ __name__, container, interface ]
+  regex: container_network.+;POD;(.{5,}|tun0|en.+)
+  action: drop
+- source_labels: [ id ]
+  regex: (/docker/.*)?/kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/.*/docker/.*/kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/.*
+  action: drop
+- regex: ^id$
+  action: labeldrop
+  # drop terraform pods
+- source_labels: [ pod ]
+  regex: ^.+\.tf-pod.+$
+  action: drop
