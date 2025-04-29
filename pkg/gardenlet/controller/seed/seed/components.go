@@ -113,6 +113,7 @@ type components struct {
 	plutono                                        plutono.Interface
 	vali                                           component.Deployer
 	kubeStateMetrics                               component.DeployWaiter
+	vpaRecommenderKubeStateMetrics                 component.DeployWaiter
 	prometheusOperator                             component.DeployWaiter
 	cachePrometheus                                component.DeployWaiter
 	seedPrometheus                                 component.DeployWaiter
@@ -231,6 +232,10 @@ func (r *Reconciler) instantiateComponents(
 		return
 	}
 	c.kubeStateMetrics, err = r.newKubeStateMetrics()
+	if err != nil {
+		return
+	}
+	c.vpaRecommenderKubeStateMetrics, err = r.newVPARecommenderKubeStateMetrics()
 	if err != nil {
 		return
 	}
@@ -669,9 +674,11 @@ func (r *Reconciler) newCentralVPARecomemnderHistoryProviderPrometheus(log logr.
 		Retention:         ptr.To(monitoringv1.Duration("8d")),
 		RetentionSize:     "3GB",
 		AdditionalPodLabels: map[string]string{
-			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
-			// "networking.resources.gardener.cloud/to-kube-apiserver-tcp-443":                                                 "allowed",
-			gardenerutils.NetworkPolicyLabel(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-kube-apiserver", 443): v1beta1constants.LabelNetworkPolicyAllowed,
+			// TODO(plkokanov): Will it be better to add a special label for vpa recommender prometheus that will also have to be added on the side of kube-apiserver and kube-state-metrics?
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets:                                                                v1beta1constants.LabelNetworkPolicyAllowed,
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyShootNamespaceAlias + "-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+			gardenerutils.NetworkPolicyLabel(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-kube-apiserver", 443):                                                 v1beta1constants.LabelNetworkPolicyAllowed,
+			gardenerutils.NetworkPolicyLabel(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-kube-state-metrics-vpa", 8080):                                        v1beta1constants.LabelNetworkPolicyAllowed,
 		},
 		CentralConfigs: prometheus.CentralConfigs{
 			AdditionalScrapeConfigs: additionalScrapeConfigs,
@@ -782,6 +789,16 @@ func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
 		r.SeedVersion,
 		v1beta1constants.PriorityClassNameSeedSystem600,
 		kubestatemetrics.SuffixSeed,
+	)
+}
+
+func (r *Reconciler) newVPARecommenderKubeStateMetrics() (component.DeployWaiter, error) {
+	return sharedcomponent.NewKubeStateMetrics(
+		r.SeedClientSet.Client(),
+		r.GardenNamespace,
+		r.SeedVersion,
+		v1beta1constants.PriorityClassNameSeedSystem600,
+		kubestatemetrics.SuffixVPA,
 	)
 }
 

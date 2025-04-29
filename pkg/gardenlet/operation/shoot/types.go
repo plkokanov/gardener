@@ -127,20 +127,21 @@ type ControlPlane struct {
 	EtcdCopyBackupsTask etcdcopybackupstask.Interface
 	EventLogger         component.Deployer
 	// TODO(oliver-goetz): Remove this deployer when Gardener v1.115.0 is released.
-	KubeAPIServerIngress     component.Deployer
-	KubeAPIServerService     component.DeployWaiter
-	KubeAPIServerSNI         component.DeployWaiter
-	KubeAPIServer            kubeapiserver.Interface
-	KubeScheduler            component.DeployWaiter
-	KubeControllerManager    kubecontrollermanager.Interface
-	KubeStateMetrics         component.DeployWaiter
-	MachineControllerManager machinecontrollermanager.Interface
-	Plutono                  plutono.Interface
-	Prometheus               prometheus.Interface
-	ResourceManager          resourcemanager.Interface
-	Vali                     vali.Interface
-	VerticalPodAutoscaler    vpa.Interface
-	VPNSeedServer            vpnseedserver.Interface
+	KubeAPIServerIngress              component.Deployer
+	KubeAPIServerService              component.DeployWaiter
+	KubeAPIServerSNI                  component.DeployWaiter
+	KubeAPIServer                     kubeapiserver.Interface
+	KubeScheduler                     component.DeployWaiter
+	KubeControllerManager             kubecontrollermanager.Interface
+	KubeStateMetrics                  component.DeployWaiter
+	KubeStateMetricsForVPARecommender component.DeployWaiter
+	MachineControllerManager          machinecontrollermanager.Interface
+	Plutono                           plutono.Interface
+	Prometheus                        prometheus.Interface
+	ResourceManager                   resourcemanager.Interface
+	Vali                              vali.Interface
+	VerticalPodAutoscaler             vpa.Interface
+	VPNSeedServer                     vpnseedserver.Interface
 }
 
 // Extensions contains references to extension resources.

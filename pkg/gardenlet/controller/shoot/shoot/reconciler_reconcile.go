@@ -525,11 +525,23 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			SkipIf:       o.Shoot.IsWorkerless,
 			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, waitUntilGardenerResourceManagerReady),
 		})
+		deployKubeStateMetricsForVPARecommender = g.Add(flow.Task{
+			Name:         "Deploying kube-state-metrics for vpa-recommender history metrics",
+			Fn:           flow.TaskFn(botanist.Shoot.Components.ControlPlane.KubeStateMetricsForVPARecommender.Deploy).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			SkipIf:       o.Shoot.IsWorkerless,
+			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, waitUntilGardenerResourceManagerReady),
+		})
+		waitUntilKubeStateMetricsForVPARecommenderDeployed = g.Add(flow.Task{
+			Name:         "Waiting for kube-state-metrics for vpa-recommender history metrics to be ready",
+			Fn:           flow.TaskFn(botanist.Shoot.Components.ControlPlane.KubeStateMetricsForVPARecommender.Wait).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			SkipIf:       o.Shoot.IsWorkerless,
+			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, waitUntilGardenerResourceManagerReady, deployKubeStateMetricsForVPARecommender),
+		})
 		_ = g.Add(flow.Task{
 			Name:         "Deploying Kubernetes vertical pod autoscaler",
 			Fn:           flow.TaskFn(botanist.DeployVerticalPodAutoscaler).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			SkipIf:       o.Shoot.IsWorkerless,
-			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, waitUntilGardenerResourceManagerReady),
+			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, waitUntilGardenerResourceManagerReady, waitUntilKubeStateMetricsForVPARecommenderDeployed),
 		})
 		_ = g.Add(flow.Task{
 			Name:         "Deploying dependency-watchdog shoot access resources",
