@@ -73,6 +73,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus"
 	gardenprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/garden"
 	longtermprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/longterm"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommendercentral"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheusoperator"
 	"github.com/gardener/gardener/pkg/component/observability/plutono"
 	sharedcomponent "github.com/gardener/gardener/pkg/component/shared"
@@ -124,18 +125,20 @@ type components struct {
 	gardenerDashboard         gardenerdashboard.Interface
 	terminalControllerManager component.DeployWaiter
 
-	gardenerMetricsExporter       component.DeployWaiter
-	kubeStateMetrics              component.DeployWaiter
-	fluentOperator                component.DeployWaiter
-	fluentBit                     component.DeployWaiter
-	fluentOperatorCustomResources component.DeployWaiter
-	plutono                       plutono.Interface
-	vali                          component.Deployer
-	prometheusOperator            component.DeployWaiter
-	alertManager                  alertmanager.Interface
-	prometheusGarden              prometheus.Interface
-	prometheusLongTerm            prometheus.Interface
-	blackboxExporter              component.DeployWaiter
+	gardenerMetricsExporter            component.DeployWaiter
+	kubeStateMetrics                   component.DeployWaiter
+	kubeStateMetricsForVPARecommender  component.DeployWaiter
+	fluentOperator                     component.DeployWaiter
+	fluentBit                          component.DeployWaiter
+	fluentOperatorCustomResources      component.DeployWaiter
+	plutono                            plutono.Interface
+	vali                               component.Deployer
+	prometheusOperator                 component.DeployWaiter
+	alertManager                       alertmanager.Interface
+	prometheusGarden                   prometheus.Interface
+	prometheusLongTerm                 prometheus.Interface
+	centralPrometheusForVPARecommender prometheus.Interface
+	blackboxExporter                   component.DeployWaiter
 }
 
 func (r *Reconciler) instantiateComponents(
@@ -281,6 +284,10 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
+	c.kubeStateMetricsForVPARecommender, err = r.newKubeStateMetricsForVPARecommender()
+	if err != nil {
+		return
+	}
 	c.fluentOperator, err = r.newFluentOperator()
 	if err != nil {
 		return
@@ -314,6 +321,10 @@ func (r *Reconciler) instantiateComponents(
 		return
 	}
 	c.prometheusLongTerm, err = r.newPrometheusLongTerm(log, garden, secretsManager, primaryIngressDomain.Name, wildcardCertSecretName)
+	if err != nil {
+		return
+	}
+	c.centralPrometheusForVPARecommender, err = r.newCentralPrometheusForVPARecommender(log, garden)
 	if err != nil {
 		return
 	}
@@ -787,6 +798,16 @@ func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
 		r.RuntimeVersion,
 		v1beta1constants.PriorityClassNameGardenSystem100,
 		kubestatemetrics.SuffixRuntime,
+	)
+}
+
+func (r *Reconciler) newKubeStateMetricsForVPARecommender() (component.DeployWaiter, error) {
+	return sharedcomponent.NewKubeStateMetrics(
+		r.RuntimeClientSet.Client(),
+		r.GardenNamespace,
+		r.RuntimeVersion,
+		v1beta1constants.PriorityClassNameGardenSystem100,
+		kubestatemetrics.SuffixVPA,
 	)
 }
 
@@ -1391,6 +1412,30 @@ func (r *Reconciler) newPrometheusLongTerm(log logr.Logger, garden *operatorv1al
 		Cortex: &prometheus.CortexValues{
 			Image:         imageCortex.String(),
 			CacheValidity: 7 * 24 * time.Hour, // 1 week
+		},
+	})
+}
+
+func (r *Reconciler) newCentralPrometheusForVPARecommender(log logr.Logger, garden *operatorv1alpha1.Garden) (prometheus.Interface, error) {
+	return sharedcomponent.NewPrometheus(log, r.RuntimeClientSet.Client(), r.GardenNamespace, prometheus.Values{
+		Name:              "vpa-recommender-seed",
+		PriorityClassName: v1beta1constants.PriorityClassNameGardenSystem100,
+		StorageCapacity:   resource.MustParse(getValidVolumeSize(garden.Spec.RuntimeCluster.Volume, "8Gi")),
+		Replicas:          2,
+		RetentionSize:     "5GB",
+		ScrapeTimeout:     "50s", // This is intentionally smaller than the scrape interval of 1m.
+		RuntimeVersion:    r.RuntimeVersion,
+		AdditionalPodLabels: map[string]string{
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyGardenScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+			// TODO(plkokanov): These network policies are the same as the ones in the seed central prometheus component for the cases where the garden cluster is also a seed, in that case the central prometheus
+			// is managed by gardener operator. Check if we should instead create a separate prometheus instance for gardener and link VPA to that instead
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets:                                                                v1beta1constants.LabelNetworkPolicyAllowed,
+			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyShootNamespaceAlias + "-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+			gardenerutils.NetworkPolicyLabel(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-kube-apiserver", 443):                                                 v1beta1constants.LabelNetworkPolicyAllowed,
+			gardenerutils.NetworkPolicyLabel(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-kube-state-metrics-vpa", 8080):                                        v1beta1constants.LabelNetworkPolicyAllowed,
+		},
+		CentralConfigs: prometheus.CentralConfigs{
+			AdditionalScrapeConfigs: vparecommendercentral.AdditionalScrapeConfigsGarden(),
 		},
 	})
 }

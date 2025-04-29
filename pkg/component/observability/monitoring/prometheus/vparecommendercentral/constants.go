@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package vparecommendergarden
+package vparecommendercentral
 
 import (
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -10,7 +10,7 @@ import (
 
 const (
 	// Label is a constant for the label of the shoot prometheus instance.
-	Label = "vpa-recommender-garden"
+	Label = "vpa-recommender-seed"
 	// ServiceAccountName is the name of the service account in the shoot cluster.
 	ServiceAccountName = "prometheus-" + Label
 	// AccessSecretName is the name of the secret containing a token for accessing the shoot cluster.

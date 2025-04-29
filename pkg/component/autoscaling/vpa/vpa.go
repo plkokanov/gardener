@@ -29,7 +29,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/garden"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/seed"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/shoot"
-	prometheusvparecommenderseed "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommenderseed"
+	prometheusvparecommenderseed "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommendercentral"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"

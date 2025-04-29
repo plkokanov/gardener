@@ -288,6 +288,16 @@ func (r *Reconciler) delete(
 			Fn:           component.OpDestroyAndWait(c.verticalPodAutoscaler).Destroy,
 			Dependencies: flow.NewTaskIDs(syncPointVirtualGardenControlPlaneDestroyed),
 		})
+		destroyVPARecommenderPrometheus = g.Add(flow.Task{
+			Name:         "Destroying vpa-recommender history provider Prometheus",
+			Fn:           component.OpDestroyAndWait(c.centralPrometheusForVPARecommender).Destroy,
+			Dependencies: flow.NewTaskIDs(destroyVerticalPodAutoscaler),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Destroying kube-state-metrics for vpa-recommender",
+			Fn:           component.OpDestroyAndWait(c.kubeStateMetricsForVPARecommender).Destroy,
+			Dependencies: flow.NewTaskIDs(destroyVerticalPodAutoscaler),
+		})
 		destroyNginxIngressController = g.Add(flow.Task{
 			Name:         "Destroying nginx-ingress controller",
 			Fn:           component.OpDestroyAndWait(c.nginxIngressController).Destroy,
@@ -296,7 +306,7 @@ func (r *Reconciler) delete(
 		destroyPrometheusOperator = g.Add(flow.Task{
 			Name:         "Destroying prometheus-operator",
 			Fn:           component.OpDestroyAndWait(c.prometheusOperator).Destroy,
-			Dependencies: flow.NewTaskIDs(destroyAlertmanager, destroyPrometheusGarden, destroyPrometheusLongTerm),
+			Dependencies: flow.NewTaskIDs(destroyAlertmanager, destroyPrometheusGarden, destroyPrometheusLongTerm, destroyVPARecommenderPrometheus),
 		})
 		destroyFluentOperatorCustomResources = g.Add(flow.Task{
 			Name:         "Destroying fluent-operator custom resources",

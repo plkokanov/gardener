@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package vparecommenderseed
+package vparecommendercentral
 
 import (
 	"bytes"
@@ -11,26 +11,34 @@ import (
 	"text/template"
 )
 
-//go:embed assets/scrapeconfigs/cadvisor.yaml
-var cAdvisor string
+var (
+	//go:embed assets/scrapeconfigs/cadvisor-seed.yaml
+	cAdvisorSeed string
+	//go:embed assets/scrapeconfigs/cadvisor-garden.yaml
+	cAdvisorGarden string
+)
 
 // Data represents the data for the template.
 type Data struct {
 	IsManagedSeed bool
 }
 
-// AdditionalScrapeConfigs returns the additional scrape configs for the cache prometheus.
+// AdditionalScrapeConfigsSeed returns the additional scrape configs for the cache prometheus.
 // TODO(plkokanov): Largely copied from `github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/cache/scrapeconfigs.go`
 // Check if we can reuse this somehow instead of copying it
-func AdditionalScrapeConfigs(isManagedSeed bool) ([]string, error) {
+func AdditionalScrapeConfigsSeed(isManagedSeed bool) ([]string, error) {
 	var out []string
 
-	if result, err := process(cAdvisor, isManagedSeed); err != nil {
+	if result, err := process(cAdvisorSeed, isManagedSeed); err != nil {
 		return nil, fmt.Errorf("failed processing cadvisor scrape config template: %w", err)
 	} else {
 		out = append(out, result)
 	}
 	return out, nil
+}
+
+func AdditionalScrapeConfigsGarden() []string {
+	return []string{cAdvisorGarden}
 }
 
 func process(text string, isManagedSeed bool) (string, error) {

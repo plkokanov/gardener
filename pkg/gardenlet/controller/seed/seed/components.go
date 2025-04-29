@@ -61,7 +61,7 @@ import (
 	aggregateprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/aggregate"
 	cacheprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/cache"
 	seedprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/seed"
-	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommenderseed"
+	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommendercentral"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheusoperator"
 	"github.com/gardener/gardener/pkg/component/observability/plutono"
 	seedsystem "github.com/gardener/gardener/pkg/component/seed/system"
@@ -661,7 +661,7 @@ func (r *Reconciler) newAggregatePrometheus(log logr.Logger, seed *seedpkg.Seed,
 }
 
 func (r *Reconciler) newCentralVPARecomemnderHistoryProviderPrometheus(log logr.Logger, seed *seedpkg.Seed, isManagedSeed bool) (component.DeployWaiter, error) {
-	additionalScrapeConfigs, err := vparecommenderseed.AdditionalScrapeConfigs(isManagedSeed)
+	additionalScrapeConfigs, err := vparecommendercentral.AdditionalScrapeConfigsSeed(isManagedSeed)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting additional scrape configs: %w", err)
 	}
@@ -684,7 +684,7 @@ func (r *Reconciler) newCentralVPARecomemnderHistoryProviderPrometheus(log logr.
 			AdditionalScrapeConfigs: additionalScrapeConfigs,
 		},
 		AdditionalResources: []client.Object{
-			vparecommenderseed.NetworkPolicyToKubelet(r.GardenNamespace, seed.GetNodeCIDR()),
+			vparecommendercentral.NetworkPolicyToKubelet(r.GardenNamespace, seed.GetNodeCIDR()),
 		},
 	})
 }

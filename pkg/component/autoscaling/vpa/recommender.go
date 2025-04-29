@@ -27,7 +27,7 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
-	prometheusvparecommenderseed "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommenderseed"
+	prometheusvparecommenderseed "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/vparecommendercentral"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
