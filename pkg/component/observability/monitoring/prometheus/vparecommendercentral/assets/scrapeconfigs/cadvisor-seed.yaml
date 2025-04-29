@@ -1,4 +1,4 @@
-job_name: cadvisor
+job_name: cadvisor-seed
 honor_timestamps: false
 honor_labels: false
 scheme: https

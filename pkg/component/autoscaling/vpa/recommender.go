@@ -158,11 +158,11 @@ func (v *vpa) recommenderResourceConfigs() component.ResourceConfigs {
 			vpa                        = v.emptyVerticalPodAutoscaler(recommender)
 			cadvisorScrapeConfig       = v.emptyCAdvisorScrapeConfig()
 			cadvisorClusterRole        = v.emptyClusterRole("vpa-recommender-cadvisor")
-			cadvisorCLusterRoleBinding = v.emptyClusterRoleBinding("vpa-recommender-cadvisor")
+			cadvisorClusterRoleBinding = v.emptyClusterRoleBinding("vpa-recommender-cadvisor")
 		)
 		configs = append(configs,
 			component.ResourceConfig{Obj: cadvisorClusterRole, Class: component.Application, MutateFn: func() { v.reconcileCAdvisorClusterRole(cadvisorClusterRole) }},
-			component.ResourceConfig{Obj: cadvisorCLusterRoleBinding, Class: component.Application, MutateFn: func() { v.reconcileCAdvsiroClusterRoleBinding(cadvisorCLusterRoleBinding, cadvisorClusterRole) }},
+			component.ResourceConfig{Obj: cadvisorClusterRoleBinding, Class: component.Application, MutateFn: func() { v.reconcileCAdvsiroClusterRoleBinding(cadvisorClusterRoleBinding, cadvisorClusterRole) }},
 			component.ResourceConfig{Obj: cadvisorScrapeConfig, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderHistoryProviderScrapeConfig(cadvisorScrapeConfig) }},
 			component.ResourceConfig{Obj: vpa, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderVPA(vpa, deployment) }},
 			component.ResourceConfig{Obj: deployment, Class: component.Runtime, MutateFn: func() { v.reconcileRecommenderDeployment(deployment, nil) }},
@@ -242,7 +242,7 @@ func (v *vpa) reconcileRecommenderHistoryProviderScrapeConfig(scrapeConfig *moni
 		RelabelConfigs: []monitoringv1.RelabelConfig{
 			{
 				Action:      "replace",
-				Replacement: ptr.To("cadvisor"),
+				Replacement: ptr.To("cadvisor-" + v.namespace),
 				TargetLabel: "job",
 			},
 			{
@@ -436,22 +436,27 @@ func (v *vpa) reconcileRecommenderDeployment(deployment *appsv1.Deployment, serv
 		},
 	}
 
-	if prometheusHistoryProvider := v.values.Recommender.PrometheusHistoryProvider; prometheusHistoryProvider != nil {
-		deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
-			gardenerutils.NetworkPolicyLabel(prometheusHistoryProvider.ServiceName, 9090): v1beta1constants.LabelNetworkPolicyAllowed,
-		})
-	}
-
 	switch v.values.ClusterType {
 	case component.ClusterTypeSeed:
 		deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
 			v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer: v1beta1constants.LabelNetworkPolicyAllowed,
 		})
+		if prometheusHistoryProvider := v.values.Recommender.PrometheusHistoryProvider; prometheusHistoryProvider != nil {
+			deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
+				gardenerutils.NetworkPolicyLabel(prometheusHistoryProvider.ServiceName, 9090): v1beta1constants.LabelNetworkPolicyAllowed,
+			})
+		}
 
 	case component.ClusterTypeShoot:
 		deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
 			gardenerutils.NetworkPolicyLabel(v1beta1constants.DeploymentNameKubeAPIServer, kubeapiserverconstants.Port): v1beta1constants.LabelNetworkPolicyAllowed,
 		})
+		if prometheusHistoryProvider := v.values.Recommender.PrometheusHistoryProvider; prometheusHistoryProvider != nil {
+			deployment.Spec.Template.Labels = utils.MergeStringMaps(deployment.Spec.Template.Labels, map[string]string{
+				gardenerutils.NetworkPolicyLabel(v1beta1constants.GardenNamespace+"-"+prometheusHistoryProvider.ServiceName, 9090):                        v1beta1constants.LabelNetworkPolicyAllowed,
+				"networking.resources.gardener.cloud/to-" + v1beta1constants.GardenNamespace + "-" + v1beta1constants.LabelNetworkPolicySeedScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
+			})
+		}
 	}
 
 	v.injectAPIServerConnectionSpec(deployment, recommender, serviceAccountName)

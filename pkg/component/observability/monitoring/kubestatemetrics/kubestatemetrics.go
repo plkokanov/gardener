@@ -133,7 +133,7 @@ func (k *kubeStateMetrics) getResourcesForSeedVPARecommender() []client.Object {
 			k.podDisruptionBudget(deployment),
 			k.service(),
 			k.verticalPodAutoscaler(deployment),
-			k.scrapeConfigVPARecommender(vparecommendercentral.Label),
+			k.scrapeConfigVPARecommender(vparecommendercentral.Label, "-seed"),
 		}
 	)
 
@@ -145,7 +145,7 @@ func (k *kubeStateMetrics) getResourcesForShootVPARecommender(genericTokenKubeco
 
 	return []client.Object{
 		deployment,
-		k.scrapeConfigVPARecommender(vparecommendercentral.Label),
+		k.scrapeConfigVPARecommender(vparecommendercentral.Label, "-"+k.namespace),
 		k.service(),
 		k.verticalPodAutoscaler(deployment),
 	}

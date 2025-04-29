@@ -40,10 +40,23 @@ func (b *Botanist) DefaultVerticalPodAutoscaler() (vpa.Interface, error) {
 			Replicas:                    ptr.To(b.Shoot.GetReplicas(1)),
 			TopologyAwareRoutingEnabled: b.Shoot.TopologyAwareRoutingEnabled,
 		}
+		valuesPrometheusHistoryProvider = vpa.PrometheusHistoryProvider{
+			ServiceName:           "prometheus-vpa-recommender-seed",
+			Namespace:             v1beta1constants.GardenNamespace,
+			Port:                  80,
+			CAdvisorJobName:       "cadvisor-" + b.Shoot.ControlPlaneNamespace,
+			MetricForPodLabels:    "kube_pod_labels{job=\"kube-state-metrics-" + b.Shoot.ControlPlaneNamespace + "\"}[8d]",
+			PodLabelPrefix:        "label_",
+			PodNamespaceLabel:     "namespace",
+			PodNameLabel:          "pod",
+			ContainerNameLabel:    "container",
+			ContainerPodNameLabel: "pod",
+		}
 		valuesRecommender = vpa.ValuesRecommender{
-			Image:             imageRecommender.String(),
-			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane200,
-			Replicas:          ptr.To(b.Shoot.GetReplicas(1)),
+			Image:                     imageRecommender.String(),
+			PriorityClassName:         v1beta1constants.PriorityClassNameShootControlPlane200,
+			Replicas:                  ptr.To(b.Shoot.GetReplicas(1)),
+			PrometheusHistoryProvider: &valuesPrometheusHistoryProvider,
 		}
 		valuesUpdater = vpa.ValuesUpdater{
 			Image:             imageUpdater.String(),

@@ -369,7 +369,7 @@ func (k *kubeStateMetrics) podDisruptionBudget(deployment *appsv1.Deployment) *p
 	return podDisruptionBudget
 }
 
-func (k *kubeStateMetrics) standardScrapeConfigSpec() monitoringv1alpha1.ScrapeConfigSpec {
+func (k *kubeStateMetrics) standardScrapeConfigSpec(jobSuffix string) monitoringv1alpha1.ScrapeConfigSpec {
 	return monitoringv1alpha1.ScrapeConfigSpec{
 		KubernetesSDConfigs: []monitoringv1alpha1.KubernetesSDConfig{{
 			// Service is used, because we only care about metric from one kube-state-metrics instance and not multiple
@@ -394,7 +394,7 @@ func (k *kubeStateMetrics) standardScrapeConfigSpec() monitoringv1alpha1.ScrapeC
 			},
 			{
 				Action:      "replace",
-				Replacement: ptr.To("kube-state-metrics"),
+				Replacement: ptr.To("kube-state-metrics" + jobSuffix),
 				TargetLabel: "job",
 			},
 			{
@@ -551,7 +551,7 @@ var shootMetricAllowlist = []string{
 func (k *kubeStateMetrics) scrapeConfigCache() *monitoringv1alpha1.ScrapeConfig {
 	scrapeConfig := &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics", k.namespace, cache.Label)}
 	scrapeConfig.Labels = monitoringutils.Labels(cache.Label)
-	scrapeConfig.Spec = k.standardScrapeConfigSpec()
+	scrapeConfig.Spec = k.standardScrapeConfigSpec("")
 	return scrapeConfig
 }
 
@@ -639,14 +639,14 @@ func (k *kubeStateMetrics) scrapeConfigGarden() *monitoringv1alpha1.ScrapeConfig
 func (k *kubeStateMetrics) scrapeConfigShoot() *monitoringv1alpha1.ScrapeConfig {
 	scrapeConfig := &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics"+k.values.NameSuffix, k.namespace, shoot.Label)}
 	scrapeConfig.Labels = monitoringutils.Labels(shoot.Label)
-	scrapeConfig.Spec = k.standardScrapeConfigSpec()
+	scrapeConfig.Spec = k.standardScrapeConfigSpec("")
 	return scrapeConfig
 }
 
-func (k *kubeStateMetrics) scrapeConfigVPARecommender(prometheusName string) *monitoringv1alpha1.ScrapeConfig {
+func (k *kubeStateMetrics) scrapeConfigVPARecommender(prometheusName, scrapeJobSuffix string) *monitoringv1alpha1.ScrapeConfig {
 	scrapeConfig := &monitoringv1alpha1.ScrapeConfig{ObjectMeta: monitoringutils.ConfigObjectMeta("kube-state-metrics"+k.values.NameSuffix, k.namespace, prometheusName)}
 	scrapeConfig.Labels = monitoringutils.Labels(prometheusName)
-	scrapeConfig.Spec = k.standardScrapeConfigSpec()
+	scrapeConfig.Spec = k.standardScrapeConfigSpec("-" + scrapeJobSuffix)
 	return scrapeConfig
 }
 
