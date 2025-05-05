@@ -74,6 +74,8 @@ type Values struct {
 	Replicas int32
 	// NameSuffix is attached to the deployment name and related resources.
 	NameSuffix string
+	// UsePrometheusHistoryProviderForVPARecommender determines whether vpa will use prometheus history provider.
+	UsePrometheusHistoryProviderForVPARecommender bool
 }
 
 func (k *kubeStateMetrics) getResourcesForSeed() ([]client.Object, error) {

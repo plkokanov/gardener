@@ -82,25 +82,26 @@ type Shoot struct {
 	ExternalClusterDomain *string
 	ExternalDomain        *gardenerutils.Domain
 
-	Purpose                                 gardencorev1beta1.ShootPurpose
-	IsWorkerless                            bool
-	WantsClusterAutoscaler                  bool
-	WantsVerticalPodAutoscaler              bool
-	WantsAlertmanager                       bool
-	IgnoreAlerts                            bool
-	HibernationEnabled                      bool
-	VPNHighAvailabilityEnabled              bool
-	VPNHighAvailabilityNumberOfSeedServers  int
-	VPNHighAvailabilityNumberOfShootClients int
-	VPNVPAUpdateDisabled                    bool
-	NodeLocalDNSEnabled                     bool
-	TopologyAwareRoutingEnabled             bool
-	Networks                                *Networks
-	BackupEntryName                         string
-	OSCSyncJitterPeriod                     *metav1.Duration
-	ResourcesToEncrypt                      []string
-	EncryptedResources                      []string
-	ServiceAccountIssuerHostname            *string
+	Purpose                                      gardencorev1beta1.ShootPurpose
+	IsWorkerless                                 bool
+	WantsClusterAutoscaler                       bool
+	WantsVerticalPodAutoscaler                   bool
+	UsePrometheusForVPARecommenderMetricsHistory bool
+	WantsAlertmanager                            bool
+	IgnoreAlerts                                 bool
+	HibernationEnabled                           bool
+	VPNHighAvailabilityEnabled                   bool
+	VPNHighAvailabilityNumberOfSeedServers       int
+	VPNHighAvailabilityNumberOfShootClients      int
+	VPNVPAUpdateDisabled                         bool
+	NodeLocalDNSEnabled                          bool
+	TopologyAwareRoutingEnabled                  bool
+	Networks                                     *Networks
+	BackupEntryName                              string
+	OSCSyncJitterPeriod                          *metav1.Duration
+	ResourcesToEncrypt                           []string
+	EncryptedResources                           []string
+	ServiceAccountIssuerHostname                 *string
 
 	Components *Components
 }

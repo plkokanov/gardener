@@ -172,7 +172,13 @@ func (k *kubeStateMetrics) deployment(
 			fmt.Sprintf("--port=%d", port),
 			"--telemetry-port=8081",
 		}
+		podLabelsAllowList = "origin"
 	)
+
+	if k.values.UsePrometheusHistoryProviderForVPARecommender {
+		podLabelsAllowList = "*"
+		gardenMetricAllowlist = append(gardenMetricAllowlist, "^kube_pod_labels$")
+	}
 
 	customResourceStateConfigFile := customResourceStateConfigMountDir + "/" + customResourceStateConfigMountFile
 
@@ -192,7 +198,7 @@ func (k *kubeStateMetrics) deployment(
 
 		args = append(args,
 			"--resources=deployments,pods,statefulsets,nodes,horizontalpodautoscalers,persistentvolumeclaims,replicasets,namespaces",
-			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
+			"--metric-labels-allowlist=nodes=[*],pods=["+podLabelsAllowList+"]",
 			"--metric-annotations-allowlist=namespaces=[shoot.gardener.cloud/uid]",
 			"--metric-allowlist="+metricAllowlist,
 			"--custom-resource-state-config-file="+customResourceStateConfigFile,
@@ -206,12 +212,15 @@ func (k *kubeStateMetrics) deployment(
 		})
 		args = append(args,
 			"--resources=daemonsets,deployments,nodes,pods,statefulsets,replicasets",
-			"--namespaces="+metav1.NamespaceSystem,
 			"--kubeconfig="+gardenerutils.PathGenericKubeconfig,
-			"--metric-labels-allowlist=nodes=[*],pods=[origin]",
+			"--metric-labels-allowlist=nodes=[*],pods=["+podLabelsAllowList+"]",
 			"--metric-allowlist="+strings.Join(shootMetricAllowlist, ","),
 			"--custom-resource-state-config-file="+customResourceStateConfigFile,
 		)
+
+		if !k.values.UsePrometheusHistoryProviderForVPARecommender {
+			args = append(args, "--namespaces="+metav1.NamespaceSystem)
+		}
 	}
 
 	deployment.Labels = deploymentLabels

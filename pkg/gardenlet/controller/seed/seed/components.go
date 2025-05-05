@@ -749,6 +749,7 @@ func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
 		r.SeedVersion,
 		v1beta1constants.PriorityClassNameSeedSystem600,
 		kubestatemetrics.SuffixSeed,
+		true,
 	)
 }
 

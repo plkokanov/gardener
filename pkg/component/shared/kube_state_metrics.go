@@ -21,6 +21,7 @@ func NewKubeStateMetrics(
 	runtimeVersion *semver.Version,
 	priorityClassName string,
 	nameSuffix string,
+	UsePrometheusHistoryProviderForVPARecommender bool,
 ) (
 	component.DeployWaiter,
 	error,
@@ -36,5 +37,6 @@ func NewKubeStateMetrics(
 		PriorityClassName: priorityClassName,
 		Replicas:          2,
 		NameSuffix:        nameSuffix,
+		UsePrometheusHistoryProviderForVPARecommender: UsePrometheusHistoryProviderForVPARecommender,
 	}), nil
 }

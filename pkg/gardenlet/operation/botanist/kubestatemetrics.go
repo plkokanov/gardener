@@ -30,6 +30,7 @@ func (b *Botanist) DefaultKubeStateMetrics() (component.DeployWaiter, error) {
 			Image:             image.String(),
 			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane100,
 			Replicas:          b.Shoot.GetReplicas(1),
+			UsePrometheusHistoryProviderForVPARecommender: b.Shoot.UsePrometheusForVPARecommenderMetricsHistory,
 		},
 	), nil
 }

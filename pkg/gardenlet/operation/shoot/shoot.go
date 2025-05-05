@@ -230,6 +230,8 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 	shoot.IgnoreAlerts = v1beta1helper.ShootIgnoresAlerts(shootObject)
 	shoot.WantsAlertmanager = v1beta1helper.ShootWantsAlertManager(shootObject)
 	shoot.WantsVerticalPodAutoscaler = v1beta1helper.ShootWantsVerticalPodAutoscaler(shootObject)
+	// TODO(plkokanov): modify this to be true/false depending on shoot settings or feature gate
+	shoot.UsePrometheusForVPARecommenderMetricsHistory = shoot.WantsVerticalPodAutoscaler && true
 	shoot.Components = &Components{
 		Extensions:       &Extensions{},
 		ControlPlane:     &ControlPlane{},

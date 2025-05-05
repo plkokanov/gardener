@@ -787,6 +787,7 @@ func (r *Reconciler) newKubeStateMetrics() (component.DeployWaiter, error) {
 		r.RuntimeVersion,
 		v1beta1constants.PriorityClassNameGardenSystem100,
 		kubestatemetrics.SuffixRuntime,
+		true,
 	)
 }
 
