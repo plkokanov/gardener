@@ -172,13 +172,13 @@ var _ = Describe("ScrapeConfigs", func() {
 
 		When("cluster is workerless", func() {
 			It("should return the expected objects", func() {
-				Expect(shoot.CentralScrapeConfigs(namespace, clusterCASecretName, true)).To(HaveExactElements(workerlessScrapeConfigs))
+				Expect(shoot.CentralScrapeConfigs(namespace, clusterCASecretName, true, false)).To(HaveExactElements(workerlessScrapeConfigs))
 			})
 		})
 
 		When("cluster is not workerless", func() {
 			It("should return the expected objects", func() {
-				Expect(shoot.CentralScrapeConfigs(namespace, clusterCASecretName, false)).To(HaveExactElements(append(workerlessScrapeConfigs,
+				Expect(shoot.CentralScrapeConfigs(namespace, clusterCASecretName, false, false)).To(HaveExactElements(append(workerlessScrapeConfigs,
 					&monitoringv1alpha1.ScrapeConfig{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "cadvisor",

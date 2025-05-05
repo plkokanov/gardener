@@ -1314,6 +1314,10 @@ func (r *Reconciler) newAlertmanager(log logr.Logger, garden *operatorv1alpha1.G
 }
 
 func (r *Reconciler) newPrometheusGarden(log logr.Logger, garden *operatorv1alpha1.Garden, secretsManager secretsmanager.Interface, ingressDomain string, wildcardCertSecretName *string) (prometheus.Interface, error) {
+	additionalScrapeConfigs, err := gardenprometheus.AdditionalScrapeConfigs(true)
+	if err != nil {
+		return nil, err
+	}
 	return sharedcomponent.NewPrometheus(log, r.RuntimeClientSet.Client(), r.GardenNamespace, prometheus.Values{
 		Name:              "garden",
 		PriorityClassName: v1beta1constants.PriorityClassNameGardenSystem100,
@@ -1331,7 +1335,7 @@ func (r *Reconciler) newPrometheusGarden(log logr.Logger, garden *operatorv1alph
 			"networking.resources.gardener.cloud/to-" + v1beta1constants.LabelNetworkPolicyExtensionsNamespaceAlias + "-" + v1beta1constants.LabelNetworkPolicyGardenScrapeTargets: v1beta1constants.LabelNetworkPolicyAllowed,
 		},
 		CentralConfigs: prometheus.CentralConfigs{
-			AdditionalScrapeConfigs: gardenprometheus.AdditionalScrapeConfigs(),
+			AdditionalScrapeConfigs: additionalScrapeConfigs,
 			PrometheusRules:         gardenprometheus.CentralPrometheusRules(garden.Spec.VirtualCluster.Gardener.DiscoveryServer != nil),
 			ServiceMonitors:         gardenprometheus.CentralServiceMonitors(),
 		},

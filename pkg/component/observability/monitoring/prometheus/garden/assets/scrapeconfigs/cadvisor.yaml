@@ -22,9 +22,15 @@ relabel_configs:
   replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
 
 metric_relabel_configs:
+{{ if .UsePrometheusHistoryProviderForVPARecommender }}
+- source_labels: [ "namespace", "__name__" ]
+  regex: (^(|garden;.*$|^.*;(container_memory_working_set_bytes|container_cpu_usage_seconds_total)$)
+  action: keep
+{{ else }}
 - source_labels: [ namespace ]
   regex: garden
   action: keep
+{{ end }}
 - source_labels: [ __name__ ]
   regex: ^(container_cpu_usage_seconds_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total|container_fs_inodes_total|container_fs_limit_bytes|container_fs_usage_bytes|container_last_seen|container_memory_working_set_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total)$
   action: keep

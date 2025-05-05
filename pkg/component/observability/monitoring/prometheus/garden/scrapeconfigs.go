@@ -5,7 +5,10 @@
 package garden
 
 import (
+	"bytes"
 	_ "embed"
+	"fmt"
+	"html/template"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	monitoringv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
@@ -21,9 +24,19 @@ import (
 //go:embed assets/scrapeconfigs/cadvisor.yaml
 var cAdvisor string
 
+// Data represents the data for the template.
+type Data struct {
+	UsePrometheusHistoryProviderForVPARecommender bool
+}
+
 // AdditionalScrapeConfigs returns the additional scrape configs for the garden prometheus.
-func AdditionalScrapeConfigs() []string {
-	return []string{cAdvisor}
+func AdditionalScrapeConfigs(usePrometheusHistoryProviderForVPARecommender bool) ([]string, error) {
+	result, err := process(cAdvisor, usePrometheusHistoryProviderForVPARecommender)
+	if err != nil {
+		return nil, fmt.Errorf("failed processing cadvisor scrape config template: %w", err)
+	}
+
+	return []string{result}, nil
 }
 
 // CentralScrapeConfigs returns the central ScrapeConfig resources for the garden prometheus.
@@ -90,4 +103,22 @@ func CentralScrapeConfigs(prometheusAggregateTargets []monitoringv1alpha1.Target
 	}
 
 	return out
+}
+
+func process(text string, usePrometheusHistoryProviderForVPARecommender bool) (string, error) {
+	data := Data{
+		UsePrometheusHistoryProviderForVPARecommender: usePrometheusHistoryProviderForVPARecommender,
+	}
+
+	tmpl, err := template.New("Template").Parse(text)
+	if err != nil {
+		return "", fmt.Errorf("failed parsing template: %w", err)
+	}
+
+	var result bytes.Buffer
+	if err := tmpl.Execute(&result, data); err != nil {
+		return "", fmt.Errorf("failed rendering template: %w", err)
+	}
+
+	return result.String(), nil
 }

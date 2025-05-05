@@ -19,7 +19,7 @@ import (
 var _ = Describe("PrometheusRules", func() {
 	Describe("#AdditionalScrapeConfigs", func() {
 		It("should return the expected objects", func() {
-			Expect(garden.AdditionalScrapeConfigs()).To(HaveExactElements(
+			Expect(garden.AdditionalScrapeConfigs(false)).To(HaveExactElements(
 				`job_name: cadvisor
 honor_labels: false
 scheme: https
