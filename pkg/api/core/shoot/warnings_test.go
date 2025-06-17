@@ -245,7 +245,7 @@ var _ = Describe("Warnings", func() {
 			shoot.Spec.Kubernetes.KubeControllerManager = &core.KubeControllerManagerConfig{
 				PodEvictionTimeout: &metav1.Duration{Duration: 2 * time.Minute},
 			}
-			Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(ContainElement(Equal("you are setting the spec.kubernetes.kubeControllerManager.podEvictionTimeout field. The field does not have effect since Kubernetes 1.13. Instead, use the spec.kubernetes.kubeAPIServer.(defaultNotReadyTolerationSeconds/defaultUnreachableTolerationSeconds) fields.")))
+			Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(ContainElement(Equal("you are setting the spec.kubernetes.kubeControllerManager.podEvictionTimeout field. The field does not have effect since Kubernetes 1.13 and will not be supported by gardener from Kubernetes 1.33. Instead, use the spec.kubernetes.kubeAPIServer.(defaultNotReadyTolerationSeconds/defaultUnreachableTolerationSeconds) fields.")))
 		})
 
 		It("should warn when maxEmptyBulkDelete is set for shoots using kubernetes < v1.33", func() {
