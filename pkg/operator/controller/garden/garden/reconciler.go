@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +31,7 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
+	reconcilerutils "github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	"github.com/gardener/gardener/pkg/features"
 	operatorconfigv1alpha1 "github.com/gardener/gardener/pkg/operator/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/utils/flow"
@@ -57,11 +59,16 @@ type Reconciler struct {
 	GardenNamespace       string
 	// GardenClientMap is the ClientMap used to communicate with the virtual garden cluster. It should be set by AddToManager function but the field is still public for usage in tests.
 	GardenClientMap clientmap.ClientMap
+
+	requeueRateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 }
 
 // Reconcile performs the main reconciliation logic.
-func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (result reconcile.Result, err error) {
 	log := logf.FromContext(ctx)
+
+	requeueRateLimiter := reconcilerutils.NewRequeueRateLimiter(r.requeueRateLimiter, reconcilerutils.RateLimitOnError(&err))
+	defer requeueRateLimiter.Forget(request)
 
 	garden := &operatorv1alpha1.Garden{}
 	if err := r.RuntimeClientSet.Client().Get(ctx, request.NamespacedName, garden); err != nil {
@@ -114,7 +121,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, nil
 	}
 
-	if result, err := r.reconcile(ctx, log, garden, secretsManager, targetVersion); err != nil {
+	if result, err := r.reconcile(ctx, requeueRateLimiter, log, garden, secretsManager, targetVersion, request); err != nil {
 		return result, r.updateStatusOperationError(ctx, garden, err, operationType)
 	} else if result.Requeue {
 		return result, nil

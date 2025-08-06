@@ -64,6 +64,7 @@ import (
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/component/shared"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	reconcilerutils "github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	"github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/features"
 	gardenletconfigv1alpha1 "github.com/gardener/gardener/pkg/gardenlet/apis/config/v1alpha1"
@@ -82,10 +83,12 @@ import (
 
 func (r *Reconciler) reconcile(
 	ctx context.Context,
+	requeueRateLimiter reconcilerutils.RequeueRateLimiter,
 	log logr.Logger,
 	garden *operatorv1alpha1.Garden,
 	secretsManager secretsmanager.Interface,
 	targetVersion *semver.Version,
+	req reconcile.Request,
 ) (
 	reconcile.Result,
 	error,
@@ -628,7 +631,7 @@ func (r *Reconciler) reconcile(
 
 	if !enableSeedAuthorizer {
 		log.Info("Triggering a second reconciliation to enable seed authorizer feature")
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{RequeueAfter: requeueRateLimiter.When(req)}, nil
 	}
 
 	if err := r.updateHelmChartRefForGardenlets(ctx, log, virtualClusterClient); err != nil {

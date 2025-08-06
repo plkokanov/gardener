@@ -32,6 +32,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/garden/projectrbac"
 	controllermanagerconfigv1alpha1 "github.com/gardener/gardener/pkg/controllermanager/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	reconcilerutils "github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -39,23 +40,25 @@ import (
 
 // Reconciler reconciles Projects.
 type Reconciler struct {
-	Client   client.Client
-	Config   controllermanagerconfigv1alpha1.ProjectControllerConfiguration
-	Recorder record.EventRecorder
-
-	// RateLimiter allows limiting exponential backoff for testing purposes
-	RateLimiter workqueue.TypedRateLimiter[reconcile.Request]
+	Client             client.Client
+	Config             controllermanagerconfigv1alpha1.ProjectControllerConfiguration
+	Recorder           record.EventRecorder
+	RateLimiter        workqueue.TypedRateLimiter[reconcile.Request]
+	requeueRateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 }
 
 // Reconcile reconciles Projects.
-func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (result reconcile.Result, err error) {
 	log := logf.FromContext(ctx)
 
 	ctx, cancel := controllerutils.GetMainReconciliationContext(ctx, controllerutils.DefaultReconciliationTimeout)
 	defer cancel()
 
+	backOffRateLimiter := reconcilerutils.NewRequeueRateLimiter(r.requeueRateLimiter, reconcilerutils.RateLimitOnError(&err))
+	defer backOffRateLimiter.Forget(request)
+
 	project := &gardencorev1beta1.Project{}
-	if err := r.Client.Get(ctx, request.NamespacedName, project); err != nil {
+	if err = r.Client.Get(ctx, request.NamespacedName, project); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info("Object is gone, stop reconciling")
 			return reconcile.Result{}, nil
@@ -65,7 +68,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	if project.DeletionTimestamp != nil {
 		log.Info("Deleting project")
-		return r.delete(ctx, log, project)
+		return r.delete(ctx, log, backOffRateLimiter, project, request)
 	}
 
 	log.Info("Reconciling project")
@@ -309,7 +312,7 @@ func namespaceAnnotationsFromProject(project *gardencorev1beta1.Project) map[str
 	}
 }
 
-func (r *Reconciler) delete(ctx context.Context, log logr.Logger, project *gardencorev1beta1.Project) (reconcile.Result, error) {
+func (r *Reconciler) delete(ctx context.Context, log logr.Logger, requeueRateLimiter reconcilerutils.RequeueRateLimiter, project *gardencorev1beta1.Project, req reconcile.Request) (reconcile.Result, error) {
 	if !controllerutil.ContainsFinalizer(project, gardencorev1beta1.GardenerName) {
 		return reconcile.Result{}, nil
 	}
@@ -325,7 +328,7 @@ func (r *Reconciler) delete(ctx context.Context, log logr.Logger, project *garde
 		if inUse {
 			r.Recorder.Eventf(project, corev1.EventTypeWarning, gardencorev1beta1.ProjectEventNamespaceNotEmpty, "Cannot release namespace %q because it still contains Shoots", *namespace)
 			log.Info("Cannot release Project Namespace because it still contains Shoots")
-			return reconcile.Result{Requeue: true}, patchProjectPhase(ctx, r.Client, project, gardencorev1beta1.ProjectTerminating)
+			return reconcile.Result{RequeueAfter: requeueRateLimiter.When(req)}, patchProjectPhase(ctx, r.Client, project, gardencorev1beta1.ProjectTerminating)
 		}
 
 		released, err := r.releaseNamespace(ctx, log, project, *namespace)

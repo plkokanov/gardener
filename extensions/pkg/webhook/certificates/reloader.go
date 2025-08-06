@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/gardener/gardener/pkg/controllerutils"
+	reconcilerutils "github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
@@ -44,6 +45,7 @@ type reloader struct {
 	reader                 client.Reader
 	certDir                string
 	newestServerSecretName string
+	requeueRateLimiter     workqueue.TypedRateLimiter[reconcile.Request]
 }
 
 // AddToManager does an initial retrieval of an existing webhook server secret and then adds reloader to the given
@@ -107,14 +109,16 @@ func (r *reloader) AddToManager(ctx context.Context, mgr manager.Manager, source
 
 // Reconcile reloads the server certificates from the cluster and writes them to the cert directory if they have
 // changed. From here, the controller-runtime's certwatcher will pick them up and use them for the webhook server.
-func (r *reloader) Reconcile(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+func (r *reloader) Reconcile(ctx context.Context, req reconcile.Request) (result reconcile.Result, err error) {
+	requeueRateLimiter := reconcilerutils.NewRequeueRateLimiter(r.requeueRateLimiter, reconcilerutils.RateLimitOnError(&err))
+	defer requeueRateLimiter.Forget(req)
+
 	log := logf.FromContext(ctx).WithValues(
 		"secretConfigName", r.ServerSecretName,
 		"secretNamespace", r.Namespace,
 		"identity", r.Identity,
 		"certDir", r.certDir,
 	)
-
 	log.V(1).Info("Reloading server certificate from secret")
 
 	found, secretName, serverCert, serverKey, err := r.getServerCert(ctx, r.reader)
@@ -124,7 +128,7 @@ func (r *reloader) Reconcile(ctx context.Context, _ reconcile.Request) (reconcil
 
 	if !found {
 		log.Info("Couldn't find webhook server secret, retrying")
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{RequeueAfter: requeueRateLimiter.When(req)}, nil
 	}
 
 	log = log.WithValues("secretName", secretName)

@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,6 +49,7 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	resourcesv1alpha1helper "github.com/gardener/gardener/pkg/apis/resources/v1alpha1/helper"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	reconcilerutils "github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	resourcemanagerconfigv1alpha1 "github.com/gardener/gardener/pkg/resourcemanager/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/resourcemanager/controller/garbagecollector/references"
 	resourcemanagerpredicate "github.com/gardener/gardener/pkg/resourcemanager/predicate"
@@ -73,11 +75,16 @@ type Reconciler struct {
 	ClusterID                     string
 	GarbageCollectorActivated     bool
 	RequeueAfterOnDeletionPending *time.Duration
+
+	requeueRateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 }
 
 // Reconcile manages the resources reference by ManagedResources.
-func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (result reconcile.Result, err error) {
 	log := logf.FromContext(ctx)
+
+	requeueRateLimiter := reconcilerutils.NewRequeueRateLimiter(r.requeueRateLimiter, reconcilerutils.RateLimitOnError(&err))
+	defer requeueRateLimiter.Forget(req)
 
 	mr := &resourcesv1alpha1.ManagedResource{}
 	if err := r.SourceClient.Get(ctx, req.NamespacedName, mr); err != nil {
@@ -111,7 +118,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	// must be delayed, until the deletion is finished.
 	if r.ClassFilter.IsWaitForCleanupRequired(mr) {
 		log.Info("Waiting for previous handler to clean resources created by ManagedResource")
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{RequeueAfter: requeueRateLimiter.When(req)}, nil
 	}
 	return r.reconcile(ctx, log, mr)
 }
