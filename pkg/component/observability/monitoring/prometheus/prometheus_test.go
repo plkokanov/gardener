@@ -292,9 +292,10 @@ honor_labels: true`
 					RetentionSize:      retentionSize,
 					EvaluationInterval: "1m",
 					CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
-						ScrapeInterval: "1m",
-						ReloadStrategy: ptr.To(monitoringv1.HTTPReloadStrategyType),
-						ExternalLabels: externalLabels,
+						AutomountServiceAccountToken: ptr.To(false),
+						ScrapeInterval:               "1m",
+						ReloadStrategy:               ptr.To(monitoringv1.HTTPReloadStrategyType),
+						ExternalLabels:               externalLabels,
 						AdditionalScrapeConfigs: &corev1.SecretKeySelector{
 							LocalObjectReference: corev1.LocalObjectReference{Name: "prometheus-" + name + "-additional-scrape-configs"},
 							Key:                  "prometheus.yaml",

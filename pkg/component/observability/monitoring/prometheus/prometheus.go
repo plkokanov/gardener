@@ -31,10 +31,11 @@ func (p *prometheus) prometheus(cortexConfigMap *corev1.ConfigMap) *monitoringv1
 			RetentionSize:      p.values.RetentionSize,
 			EvaluationInterval: "1m",
 			CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
-				ScrapeInterval: "1m",
-				ScrapeTimeout:  p.values.ScrapeTimeout,
-				ReloadStrategy: ptr.To(monitoringv1.HTTPReloadStrategyType),
-				ExternalLabels: p.values.ExternalLabels,
+				AutomountServiceAccountToken: ptr.To(false),
+				ScrapeInterval:               "1m",
+				ScrapeTimeout:                p.values.ScrapeTimeout,
+				ReloadStrategy:               ptr.To(monitoringv1.HTTPReloadStrategyType),
+				ExternalLabels:               p.values.ExternalLabels,
 				AdditionalScrapeConfigs: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: p.name() + secretNameSuffixAdditionalScrapeConfigs},
 					Key:                  dataKeyAdditionalScrapeConfigs,
