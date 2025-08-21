@@ -108,6 +108,11 @@ const (
 	// ProjectedTokenExpirationSeconds is a constant for an annotation on a Pod which overwrites the default token expiration
 	// seconds for the automatic mount of a projected ServiceAccount token.
 	ProjectedTokenExpirationSeconds = "projected-token-mount.resources.gardener.cloud/expiration-seconds"
+	// ProjectedTokenIgnoreDisabledAutomount is a constant for an annotation on a pod which indicates that a
+	// projected ServiceAccount token should still be mounted on the Pod even if `spec.automountServiceAccountToken` is
+	// set to false.
+	// Useful for Pods that are created from controllers that set a default value for `automountServiceAccountToken`
+	ProjectedTokenIgnoreDisabledAutomount = "projected-token-mount.resources.gardener.cloud/ignore-disabled-automount"
 
 	// HighAvailabilityConfigConsider is a constant for a label on a Namespace which indicates that the workload
 	// resources in this namespace should be considered by the HA config webhook.

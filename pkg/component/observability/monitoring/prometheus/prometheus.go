@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/alertmanager"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/resourcemanager/controller/garbagecollector/references"
@@ -40,8 +41,10 @@ func (p *prometheus) prometheus(cortexConfigMap *corev1.ConfigMap) *monitoringv1
 					LocalObjectReference: corev1.LocalObjectReference{Name: p.name() + secretNameSuffixAdditionalScrapeConfigs},
 					Key:                  dataKeyAdditionalScrapeConfigs,
 				},
-
 				PodMetadata: &monitoringv1.EmbeddedObjectMetadata{
+					Annotations: map[string]string{
+						resourcesv1alpha1.ProjectedTokenIgnoreDisabledAutomount: "true",
+					},
 					Labels: utils.MergeStringMaps(map[string]string{
 						v1beta1constants.LabelNetworkPolicyToDNS:              v1beta1constants.LabelNetworkPolicyAllowed,
 						v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer: v1beta1constants.LabelNetworkPolicyAllowed,

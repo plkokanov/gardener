@@ -60,7 +60,8 @@ func (h *Handler) Default(ctx context.Context, obj runtime.Object) error {
 		return nil
 	}
 
-	if pod.Spec.AutomountServiceAccountToken != nil && !*pod.Spec.AutomountServiceAccountToken {
+	ignoreDisabledAutomountInPodSpec := pod.Annotations[resourcesv1alpha1.ProjectedTokenIgnoreDisabledAutomount]
+	if ignoreDisabledAutomountInPodSpec != "true" && pod.Spec.AutomountServiceAccountToken != nil && !*pod.Spec.AutomountServiceAccountToken {
 		log.Info("Pod explicitly disables auto-mount by setting .spec.automountServiceAccountToken to false, nothing to be done")
 		return nil
 	}
