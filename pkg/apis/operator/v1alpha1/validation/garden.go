@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+//go:generate ../../../../../hack/generate-plugin-names.sh
+
 package validation
 
 import (
@@ -43,7 +45,6 @@ import (
 	cidrvalidation "github.com/gardener/gardener/pkg/utils/validation/cidr"
 	featuresvalidation "github.com/gardener/gardener/pkg/utils/validation/features"
 	"github.com/gardener/gardener/pkg/utils/validation/kubernetesversion"
-	plugin "github.com/gardener/gardener/plugin/pkg"
 )
 
 var gardenCoreScheme *runtime.Scheme
@@ -411,8 +412,8 @@ func validateGardenerAPIServerConfig(config *operatorv1alpha1.GardenerAPIServerC
 			return allErrs
 		}
 
-		if !slices.Contains(plugin.AllPluginNames(), admissionPlugin.Name) {
-			allErrs = append(allErrs, field.NotSupported(idxPath.Child("name"), admissionPlugin.Name, plugin.AllPluginNames()))
+		if !slices.Contains(allPluginNames, admissionPlugin.Name) {
+			allErrs = append(allErrs, field.NotSupported(idxPath.Child("name"), admissionPlugin.Name, allPluginNames))
 		}
 	}
 
