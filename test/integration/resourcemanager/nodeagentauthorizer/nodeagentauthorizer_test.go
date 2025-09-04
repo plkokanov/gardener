@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"net/http"
+	"time"
 
 	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -89,8 +90,11 @@ var _ = Describe("NodeAgentAuthorizer tests", func() {
 			By("Start manager")
 			mgrContext, mgrCancel := context.WithCancel(ctx)
 
+			stopComplete := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
+				defer close(stopComplete)
+
 				Expect(mgr.Start(mgrContext)).To(Succeed())
 			}()
 
@@ -103,6 +107,15 @@ var _ = Describe("NodeAgentAuthorizer tests", func() {
 			DeferCleanup(func() {
 				By("Stop manager")
 				mgrCancel()
+
+				Eventually(func() error {
+					select {
+					case <-stopComplete:
+						return nil
+					default:
+						return fmt.Errorf("error while waiting for manager to stop")
+					}
+				}).WithTimeout(90 * time.Second).Should(Succeed())
 			})
 		})
 
