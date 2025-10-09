@@ -35,6 +35,7 @@ import (
 	resourcemanagerconfigv1alpha1 "github.com/gardener/gardener/pkg/resourcemanager/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/resourcemanager/webhook/nodeagentauthorizer"
 	"github.com/gardener/gardener/pkg/utils"
+	netutils "github.com/gardener/gardener/pkg/utils/net"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 )
@@ -60,9 +61,13 @@ var _ = Describe("NodeAgentAuthorizer tests", func() {
 	runTests := func() {
 		BeforeEach(func() {
 			By("Setup manager")
+			port, _, err := netutils.SuggestPort("")
+			Expect(err).NotTo(HaveOccurred())
+			portFw.destination = port
+
 			mgr, err := manager.New(testRestConfig, manager.Options{
 				WebhookServer: webhook.NewServer(webhook.Options{
-					Port:    testEnv.WebhookInstallOptions.LocalServingPort,
+					Port:    port,
 					Host:    testEnv.WebhookInstallOptions.LocalServingHost,
 					CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
 				}),

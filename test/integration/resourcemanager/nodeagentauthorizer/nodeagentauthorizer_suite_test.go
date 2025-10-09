@@ -37,7 +37,6 @@ import (
 	"github.com/gardener/gardener/pkg/resourcemanager/webhook/nodeagentauthorizer"
 	"github.com/gardener/gardener/pkg/utils"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
-	netutils "github.com/gardener/gardener/pkg/utils/net"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 	"github.com/gardener/gardener/test/framework"
 )
@@ -69,6 +68,78 @@ var (
 	testNamespace *corev1.Namespace
 )
 
+type portForwarder struct {
+	destination int
+}
+
+func (p *portForwarder) OpenPortForwarder(listenHost string) (port int, resolvedHost string, closeFn func() error, err error) {
+	if listenHost == "" {
+		listenHost = "localhost"
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(listenHost, "0"))
+	if err != nil {
+		return
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return
+	}
+
+	closeFn = func() error {
+		return l.Close()
+	}
+
+	port = l.Addr().(*net.TCPAddr).Port
+	resolvedHost = addr.IP.String()
+
+	// Start accepting connections and forwarding data
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				// Listener closed or error occurred
+				return
+			}
+
+			// Handle each connection in a separate goroutine
+			go func(clientConn net.Conn) {
+				defer clientConn.Close()
+
+				// Connect to the destination
+				destConn, err := net.Dial("tcp", listenHost+":"+fmt.Sprintf("%d", p.destination))
+				if err != nil {
+					return
+				}
+				defer destConn.Close()
+
+				// Start forwarding data in both directions
+				done := make(chan struct{}, 2)
+
+				// Forward from client to destination
+				go func() {
+					defer func() { done <- struct{}{} }()
+					_, _ = clientConn.(*net.TCPConn).ReadFrom(destConn)
+				}()
+
+				// Forward from destination to client
+				go func() {
+					defer func() { done <- struct{}{} }()
+					_, _ = destConn.(*net.TCPConn).ReadFrom(clientConn)
+				}()
+
+				// Wait for one direction to close
+				<-done
+			}(conn)
+		}
+	}()
+
+	return
+}
+
+var portFw portForwarder
+
 var _ = BeforeSuite(func() {
 	logf.SetLogger(logger.MustNewZapLogger(logger.DebugLevel, logger.FormatJSON, zap.WriteTo(GinkgoWriter)))
 	log = logf.Log.WithName(testID)
@@ -80,8 +151,13 @@ var _ = BeforeSuite(func() {
 	By("Create kubeconfig file for the authorization webhook")
 	webhookAddress, err := net.ResolveTCPAddr("tcp", net.JoinHostPort("localhost", "0"))
 	Expect(err).NotTo(HaveOccurred())
-	webhookPort, _, err := netutils.SuggestPort("")
+
+	webhookPort, _, closeFn, err := portFw.OpenPortForwarder("")
 	Expect(err).ToNot(HaveOccurred())
+	DeferCleanup(func() {
+		closeFn()
+	})
+
 	kubeconfigFileName, err := createKubeconfigFileForAuthorizationWebhook(webhookAddress.IP.String(), webhookPort)
 	Expect(err).ToNot(HaveOccurred())
 	DeferCleanup(func() {
@@ -116,10 +192,10 @@ var _ = BeforeSuite(func() {
 			},
 		},
 		ErrorIfCRDPathMissing: true,
-		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			LocalServingHost: webhookAddress.IP.String(),
-			LocalServingPort: webhookPort,
-		},
+		// WebhookInstallOptions: envtest.WebhookInstallOptions{
+		// 	LocalServingHost: webhookAddress.IP.String(),
+		// 	LocalServingPort: webhookPort,
+		// },
 	}
 
 	testRestConfig, err = testEnv.Start()
