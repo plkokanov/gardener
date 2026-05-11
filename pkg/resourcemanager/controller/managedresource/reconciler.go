@@ -277,6 +277,121 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, mr *resourc
 		}
 	}
 
+	for _, ref := range mr.Spec.DataRefs {
+		mrd := &resourcesv1alpha1.ManagedResourceData{ObjectMeta: metav1.ObjectMeta{Name: ref.Name, Namespace: mr.Namespace}}
+		if err := r.SourceClient.Get(ctx, client.ObjectKeyFromObject(mrd), mrd); err != nil {
+			conditionResourcesApplied = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionResourcesApplied, gardencorev1beta1.ConditionFalse, "CannotReadData", err.Error())
+			if err := updateConditions(ctx, r.SourceClient, mr, conditionResourcesApplied); err != nil {
+				return reconcile.Result{}, fmt.Errorf("could not update the ManagedResource status: %w", err)
+			}
+
+			return reconcile.Result{}, fmt.Errorf("could not read ManagedResourceData '%s': %+v", mrd.Name, err)
+		}
+
+		dataKeys := make([]string, 0, len(mrd.Data))
+		for dataKey := range mrd.Data {
+			dataKeys = append(dataKeys, dataKey)
+		}
+		slices.Sort(dataKeys)
+
+		for _, dataKey := range dataKeys {
+			var reader io.Reader = bytes.NewReader(mrd.Data[dataKey])
+			if strings.HasSuffix(dataKey, resourcesv1alpha1.BrotliCompressionSuffix) {
+				reader = brotli.NewReader(reader)
+			}
+
+			var (
+				decoder    = yaml.NewYAMLOrJSONDecoder(reader, 1024)
+				decodedObj map[string]any
+			)
+
+			for indexInFile := 0; true; indexInFile++ {
+				objLog := log.WithValues("managedResourceData", client.ObjectKeyFromObject(mrd), "dataKey", dataKey, "indexInFile", indexInFile)
+
+				err := decoder.Decode(&decodedObj)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					dErr := &decodingError{
+						err:         err,
+						secret:      client.ObjectKeyFromObject(mrd),
+						secretKey:   dataKey,
+						indexInFile: indexInFile,
+					}
+					decodingErrors = append(decodingErrors, dErr)
+					objLog.Error(dErr.err, "Could not decode resource")
+					continue
+				}
+
+				if decodedObj == nil {
+					continue
+				}
+
+				obj := &unstructured.Unstructured{Object: decodedObj}
+				objLog = objLog.WithValues("object", client.Object(obj))
+
+				mapping, err := r.TargetRESTMapper.RESTMapping(obj.GroupVersionKind().GroupKind(), obj.GroupVersionKind().Version)
+				if err != nil || mapping == nil {
+					errMsg := "<nil>"
+					if err != nil {
+						errMsg = err.Error()
+					}
+					objLog.Info("Could not get RESTMapping for object", "err", errMsg)
+
+					if obj.GetKind() != "Namespace" && obj.GetNamespace() == "" {
+						obj.SetNamespace(metav1.NamespaceDefault)
+					}
+				} else {
+					if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
+						if obj.GetNamespace() == "" {
+							obj.SetNamespace(metav1.NamespaceDefault)
+						}
+					} else {
+						obj.SetNamespace("")
+					}
+				}
+
+				var (
+					newObj = object{
+						obj:                       obj,
+						forceOverwriteLabels:      forceOverwriteLabels,
+						forceOverwriteAnnotations: forceOverwriteAnnotations,
+					}
+					objectReference = resourcesv1alpha1.ObjectReference{
+						ObjectReference: corev1.ObjectReference{
+							APIVersion: newObj.obj.GetAPIVersion(),
+							Kind:       newObj.obj.GetKind(),
+							Name:       newObj.obj.GetName(),
+							Namespace:  newObj.obj.GetNamespace(),
+						},
+						Labels:      mergeMaps(newObj.obj.GetLabels(), mr.Spec.InjectLabels),
+						Annotations: newObj.obj.GetAnnotations(),
+					}
+				)
+
+				objectReference.Labels[resourcesv1alpha1.ManagedBy] = *r.Config.ManagedByLabelValue
+
+				var found bool
+				newObj.oldInformation, found = existingResourcesIndex.Lookup(objectReference)
+				decodedObj = nil
+
+				if ignoreMode(obj) {
+					if found {
+						orphanedObjectReferences = append(orphanedObjectReferences, objectReference)
+					}
+
+					objLog.Info("Skipping object because it is marked to be ignored")
+					continue
+				}
+
+				hash.Write(mrd.Data[dataKey])
+				newResourcesObjects = append(newResourcesObjects, newObj)
+				newResourcesObjectReferences = append(newResourcesObjectReferences, objectReference)
+			}
+		}
+	}
+
 	// calculate the checksum for the referenced secrets data.
 	secretsDataChecksum := hex.EncodeToString(hash.Sum(nil))
 

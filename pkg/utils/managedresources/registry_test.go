@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	kubernetesscheme "k8s.io/client-go/kubernetes/scheme"
 
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	. "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/test"
 )
@@ -126,12 +127,14 @@ roleRef:
 			Expect(registry.Add(secret)).To(Succeed())
 			Expect(registry.Add(roleBinding)).To(Succeed())
 
-			serializedData := []byte(secretSerialized + "---\n" + roleBindingSerialized)
-			compressedData, err := test.BrotliCompression(serializedData)
+			compressedSecretData, err := test.BrotliCompressionForManifests(secretSerialized)
+			Expect(err).NotTo(HaveOccurred())
+			compressedPlainData, err := test.BrotliCompressionForManifests(roleBindingSerialized)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(registry.SerializedObjects()).To(Equal(map[string][]byte{
-				"data.yaml.br": compressedData,
+				resourcesv1alpha1.CompressedDataKey:      compressedSecretData,
+				resourcesv1alpha1.CompressedPlainDataKey: compressedPlainData,
 			}))
 		})
 
@@ -143,7 +146,7 @@ roleRef:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(registry.SerializedObjects()).To(Equal(map[string][]byte{
-					"data.yaml.br": compressedData,
+					resourcesv1alpha1.CompressedDataKey: compressedData,
 				}))
 			})
 		})
@@ -153,11 +156,14 @@ roleRef:
 				objectMap, err := registry.AddAllAndSerialize(secret, roleBinding)
 				Expect(err).NotTo(HaveOccurred())
 
-				compressedData, err := test.BrotliCompressionForManifests(secretSerialized, roleBindingSerialized)
+				compressedSecretData, err := test.BrotliCompressionForManifests(secretSerialized)
+				Expect(err).NotTo(HaveOccurred())
+				compressedPlainData, err := test.BrotliCompressionForManifests(roleBindingSerialized)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(objectMap).To(Equal(map[string][]byte{
-					"data.yaml.br": compressedData,
+					resourcesv1alpha1.CompressedDataKey:      compressedSecretData,
+					resourcesv1alpha1.CompressedPlainDataKey: compressedPlainData,
 				}))
 			})
 		})

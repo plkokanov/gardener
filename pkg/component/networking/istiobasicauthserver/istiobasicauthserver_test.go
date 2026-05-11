@@ -402,6 +402,9 @@ status: {}
 					SecretRefs: []corev1.LocalObjectReference{{
 						Name: managedResource.Spec.SecretRefs[0].Name,
 					}},
+					DataRefs: []corev1.LocalObjectReference{{
+						Name: managedResource.Spec.DataRefs[0].Name,
+					}},
 					KeepObjects: ptr.To(false),
 				},
 			}
@@ -414,7 +417,19 @@ status: {}
 			Expect(managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
 			Expect(managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
 
-			manifests, err := test.ExtractManifestsFromManagedResourceData(managedResourceSecret.Data)
+			mergedData := make(map[string][]byte)
+			for k, v := range managedResourceSecret.Data {
+				mergedData[k] = v
+			}
+			managedResourceData := &resourcesv1alpha1.ManagedResourceData{ObjectMeta: metav1.ObjectMeta{
+				Name:      managedResource.Spec.DataRefs[0].Name,
+				Namespace: managedResource.Namespace,
+			}}
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(Succeed())
+			for k, v := range managedResourceData.Data {
+				mergedData[k] = v
+			}
+			manifests, err := test.ExtractManifestsFromManagedResourceData(mergedData)
 			Expect(err).NotTo(HaveOccurred())
 			nonSecretManifests, secretManifests = filterManifests(manifests)
 		})

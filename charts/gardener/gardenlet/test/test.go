@@ -211,6 +211,7 @@ func getGardenletClusterRole(labels map[string]string) *rbacv1.ClusterRole {
 					"wasmplugins.extensions.istio.io",
 					"proxyconfigs.networking.istio.io",
 					"managedresources.resources.gardener.cloud",
+					"managedresourcedatas.resources.gardener.cloud",
 					"clusterfilters.fluentbit.fluent.io",
 					"clusterfluentbitconfigs.fluentbit.fluent.io",
 					"clusterinputs.fluentbit.fluent.io",
@@ -299,6 +300,11 @@ func getGardenletClusterRole(labels map[string]string) *rbacv1.ClusterRole {
 				APIGroups: []string{"resources.gardener.cloud"},
 				Resources: []string{"managedresources"},
 				Verbs:     []string{"create", "delete", "deletecollection", "get", "list", "watch", "patch", "update"},
+			},
+			{
+				APIGroups: []string{"resources.gardener.cloud"},
+				Resources: []string{"managedresourcedatas"},
+				Verbs:     []string{"create", "delete", "get", "list", "watch", "patch", "update"},
 			},
 			{
 				APIGroups: []string{"networking.k8s.io"},

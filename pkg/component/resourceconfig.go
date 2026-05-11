@@ -85,6 +85,8 @@ const (
 
 // DeployResourceConfigs deploys the provided ResourceConfigs <allResources> based on the ClusterType.
 // For seeds, all resources are deployed via a single ManagedResource (independent of their Class).
+// The Registry automatically splits Secret objects into a Secret backing store and all other objects
+// into a ManagedResourceData backing store.
 // For shoots, all Runtime resources are applied directly with the client while all Application resources are deployed
 // via a ManagedResource.
 func DeployResourceConfigs(

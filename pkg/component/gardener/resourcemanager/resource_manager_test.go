@@ -165,6 +165,11 @@ var _ = Describe("ResourceManager", func() {
 				Verbs:     []string{"get", "list", "watch", "update", "patch"},
 			},
 			{
+				APIGroups: []string{"resources.gardener.cloud"},
+				Resources: []string{"managedresourcedatas"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+			{
 				APIGroups: []string{""},
 				Resources: []string{"secrets"},
 				Verbs:     []string{"get", "list", "watch", "update", "patch"},
@@ -2581,6 +2586,8 @@ subjects:
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, client.ObjectKey{Name: "managedresources.resources.gardener.cloud"}, gomock.AssignableToTypeOf(&apiextensionsv1.CustomResourceDefinition{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&apiextensionsv1.CustomResourceDefinition{}), gomock.Any()),
+					c.EXPECT().Get(ctx, client.ObjectKey{Name: "managedresourcedatas.resources.gardener.cloud"}, gomock.AssignableToTypeOf(&apiextensionsv1.CustomResourceDefinition{})),
+					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&apiextensionsv1.CustomResourceDefinition{}), gomock.Any()),
 					c.EXPECT().Get(ctx, client.ObjectKey{Namespace: deployNamespace, Name: "gardener-resource-manager"}, gomock.AssignableToTypeOf(&corev1.ServiceAccount{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.ServiceAccount{}), gomock.Any()).
 						Do(func(_ context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
@@ -2844,7 +2851,9 @@ subjects:
 			It("should delete all created resources", func() {
 				gomock.InOrder(
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&apiextensionsv1.CustomResourceDefinition{}), gomock.Any()),
+					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&apiextensionsv1.CustomResourceDefinition{}), gomock.Any()),
 					c.EXPECT().Delete(ctx, &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "managedresources.resources.gardener.cloud"}}),
+					c.EXPECT().Delete(ctx, &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "managedresourcedatas.resources.gardener.cloud"}}),
 					c.EXPECT().Delete(ctx, &admissionregistrationv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
 					c.EXPECT().Delete(ctx, &admissionregistrationv1.ValidatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
 					c.EXPECT().Delete(ctx, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName}}),
@@ -3004,9 +3013,23 @@ subjects:
 					},
 				}
 
+				readyCRDData := &apiextensionsv1.CustomResourceDefinition{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "managedresourcedatas.resources.gardener.cloud",
+					},
+					Status: apiextensionsv1.CustomResourceDefinitionStatus{
+						Conditions: []apiextensionsv1.CustomResourceDefinitionCondition{
+							{Type: apiextensionsv1.Established, Status: apiextensionsv1.ConditionTrue},
+							{Type: apiextensionsv1.NamesAccepted, Status: apiextensionsv1.ConditionTrue},
+						},
+					},
+				}
+
 				Expect(fakeClient.Create(ctx, readyCRD)).To(Succeed())
+				Expect(fakeClient.Create(ctx, readyCRDData)).To(Succeed())
 				DeferCleanup(func() {
 					Expect(fakeClient.Delete(ctx, readyCRD)).To(Succeed())
+					Expect(fakeClient.Delete(ctx, readyCRDData)).To(Succeed())
 				})
 
 				Expect(resourceManager.Wait(ctx)).To(Succeed())

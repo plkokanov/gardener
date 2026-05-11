@@ -91,6 +91,17 @@ func (r *Reconciler) AddToManager(mgr manager.Manager, sourceCluster, targetClus
 			// See https://github.com/kubernetes-sigs/controller-runtime/pull/3406 for more information.
 			builder.WithPredicates(predicateutils.ForEventTypes(predicateutils.Update)),
 		).
+		Watches(
+			&resourcesv1alpha1.ManagedResourceData{},
+			handler.EnqueueRequestsFromMapFunc(r.MapManagedResourceDataToManagedResources(
+				r.ClassFilter,
+				predicate.Or(
+					resourcemanagerpredicate.NotIgnored(),
+					predicateutils.IsDeleting(),
+				),
+			)),
+			builder.WithPredicates(predicateutils.ForEventTypes(predicateutils.Update)),
+		).
 		Complete(reconcilerutils.OperationAnnotationWrapper(
 			mgr,
 			func() client.Object { return &resourcesv1alpha1.ManagedResource{} },
@@ -123,6 +134,44 @@ func (r *Reconciler) MapSecretToManagedResources(managedResourcePredicates ...pr
 
 			for _, secretRef := range mr.Spec.SecretRefs {
 				if secretRef.Name == secret.Name {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Namespace: mr.Namespace,
+							Name:      mr.Name,
+						},
+					})
+				}
+			}
+		}
+		return requests
+	}
+}
+
+// MapManagedResourceDataToManagedResources maps ManagedResourceData objects to relevant ManagedResources.
+func (r *Reconciler) MapManagedResourceDataToManagedResources(managedResourcePredicates ...predicate.Predicate) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		if obj == nil {
+			return nil
+		}
+
+		mrd, ok := obj.(*resourcesv1alpha1.ManagedResourceData)
+		if !ok {
+			return nil
+		}
+
+		managedResourceList := &resourcesv1alpha1.ManagedResourceList{}
+		if err := r.SourceClient.List(ctx, managedResourceList, client.InNamespace(mrd.Namespace)); err != nil {
+			return nil
+		}
+
+		var requests []reconcile.Request
+		for _, mr := range managedResourceList.Items {
+			if !predicateutils.EvalGeneric(&mr, managedResourcePredicates...) {
+				continue
+			}
+
+			for _, dataRef := range mr.Spec.DataRefs {
+				if dataRef.Name == mrd.Name {
 					requests = append(requests, reconcile.Request{
 						NamespacedName: types.NamespacedName{
 							Namespace: mr.Namespace,

@@ -709,6 +709,11 @@ status: {}
 					}},
 				},
 			}
+			if len(managedResource.Spec.DataRefs) > 0 {
+				expectedMr.Spec.DataRefs = []corev1.LocalObjectReference{{
+					Name: managedResource.Spec.DataRefs[0].Name,
+				}}
+			}
 			utilruntime.Must(references.InjectAnnotations(expectedMr))
 			Expect(managedResource).To(DeepEqual(expectedMr))
 
@@ -718,8 +723,23 @@ status: {}
 			Expect(managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
 			Expect(managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
 
+			mergedData := make(map[string][]byte)
+			for k, v := range managedResourceSecret.Data {
+				mergedData[k] = v
+			}
+			if len(managedResource.Spec.DataRefs) > 0 {
+				managedResourceData := &resourcesv1alpha1.ManagedResourceData{ObjectMeta: metav1.ObjectMeta{
+					Name:      managedResource.Spec.DataRefs[0].Name,
+					Namespace: managedResource.Namespace,
+				}}
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(Succeed())
+				for k, v := range managedResourceData.Data {
+					mergedData[k] = v
+				}
+			}
+
 			var err error
-			manifests, err = test.ExtractManifestsFromManagedResourceData(managedResourceSecret.Data)
+			manifests, err = test.ExtractManifestsFromManagedResourceData(mergedData)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

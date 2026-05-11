@@ -94,7 +94,7 @@ var _ = Describe("managedresources", func() {
 		namespace   = "test"
 		name        = "managed-resource"
 		keepObjects = true
-		data        = map[string][]byte{"some": []byte("data")}
+		data        = map[string][]byte{"secret": []byte("data")}
 
 		managedResource = func(keepObjects bool) *resourcesv1alpha1.ManagedResource {
 			return &resourcesv1alpha1.ManagedResource{
@@ -878,7 +878,7 @@ var _ = Describe("managedresources", func() {
 			By("Get objects from managed resource")
 			objects, err := GetObjects(ctx, fakeClient, namespace, name)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(objects).To(DeepEqual(expectedObjects))
+			Expect(objects).To(ConsistOf(expectedObjects))
 		})
 	})
 

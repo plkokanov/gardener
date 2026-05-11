@@ -85,6 +85,9 @@ var (
 	//go:embed assets/crd-resources.gardener.cloud_managedresources.yaml
 	// CRD is the custom resource definition for ManagedResources.
 	CRD string
+	//go:embed assets/crd-resources.gardener.cloud_managedresourcedatas.yaml
+	// CRDManagedResourceData is the custom resource definition for ManagedResourceData.
+	CRDManagedResourceData string
 
 	// SkipWebhookDeployment is a variable which controls whether the webhook deployment should be skipped.
 	// Exposed for testing.
@@ -154,6 +157,11 @@ var (
 				APIGroups: []string{"resources.gardener.cloud"},
 				Resources: []string{"managedresources", "managedresources/status"},
 				Verbs:     []string{"get", "list", "watch", "update", "patch"},
+			},
+			{
+				APIGroups: []string{"resources.gardener.cloud"},
+				Resources: []string{"managedresourcedatas"},
+				Verbs:     []string{"get", "list", "watch"},
 			},
 			{
 				APIGroups: []string{""},
@@ -428,12 +436,20 @@ func (r *resourceManager) Destroy(ctx context.Context) error {
 			return err
 		}
 
-		if err := gardenerutils.ConfirmDeletion(ctx, r.client, crd); client.IgnoreNotFound(err) != nil {
+		crdData, err := decodeCRD(CRDManagedResourceData)
+		if err != nil {
 			return err
+		}
+
+		for _, c := range []*apiextensionsv1.CustomResourceDefinition{crd, crdData} {
+			if err := gardenerutils.ConfirmDeletion(ctx, r.client, c); client.IgnoreNotFound(err) != nil {
+				return err
+			}
 		}
 
 		objectsToDelete = append([]client.Object{
 			&apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: crd.Name}},
+			&apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: crdData.Name}},
 			r.emptyMutatingWebhookConfiguration(),
 			r.emptyValidatingWebhookConfiguration(),
 			r.emptyClusterRole(),
@@ -444,8 +460,8 @@ func (r *resourceManager) Destroy(ctx context.Context) error {
 	return kubernetesutils.DeleteObjects(ctx, r.client, objectsToDelete...)
 }
 
-func (r *resourceManager) emptyCustomResourceDefinition() (*apiextensionsv1.CustomResourceDefinition, error) {
-	obj, err := runtime.Decode(codec, []byte(CRD))
+func decodeCRD(raw string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	obj, err := runtime.Decode(codec, []byte(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -458,20 +474,29 @@ func (r *resourceManager) emptyCustomResourceDefinition() (*apiextensionsv1.Cust
 	return crd, nil
 }
 
-func (r *resourceManager) ensureCustomResourceDefinition(ctx context.Context) error {
-	desiredCRD, err := r.emptyCustomResourceDefinition()
-	if err != nil {
-		return err
-	}
+func (r *resourceManager) emptyCustomResourceDefinition() (*apiextensionsv1.CustomResourceDefinition, error) {
+	return decodeCRD(CRD)
+}
 
-	crd := &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: desiredCRD.Name}}
-	_, err = controllerutils.GetAndCreateOrMergePatch(ctx, r.client, crd, func() error {
-		crd.Annotations = utils.MergeStringMaps(crd.Annotations, desiredCRD.Annotations)
-		crd.Labels = utils.MergeStringMaps(crd.Labels, desiredCRD.Labels)
-		crd.Spec = desiredCRD.Spec
-		return nil
-	})
-	return err
+func (r *resourceManager) ensureCustomResourceDefinition(ctx context.Context) error {
+	for _, raw := range []string{CRD, CRDManagedResourceData} {
+		desiredCRD, err := decodeCRD(raw)
+		if err != nil {
+			return err
+		}
+
+		crd := &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: desiredCRD.Name}}
+		_, err = controllerutils.GetAndCreateOrMergePatch(ctx, r.client, crd, func() error {
+			crd.Annotations = utils.MergeStringMaps(crd.Annotations, desiredCRD.Annotations)
+			crd.Labels = utils.MergeStringMaps(crd.Labels, desiredCRD.Labels)
+			crd.Spec = desiredCRD.Spec
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *resourceManager) ensureRBAC(ctx context.Context) error {
@@ -2074,13 +2099,15 @@ func (r *resourceManager) Wait(ctx context.Context) error {
 	defer cancel()
 
 	if r.values.ResponsibilityMode != ForShootOrVirtualGarden {
-		desiredCRD, err := r.emptyCustomResourceDefinition()
-		if err != nil {
-			return err
-		}
+		for _, raw := range []string{CRD, CRDManagedResourceData} {
+			desiredCRD, err := decodeCRD(raw)
+			if err != nil {
+				return err
+			}
 
-		if err := kubernetesutils.WaitUntilCRDManifestsReady(ctx, r.client, desiredCRD.Name); err != nil {
-			return fmt.Errorf("failed waiting for CRD %q to be ready: %w", desiredCRD.Name, err)
+			if err := kubernetesutils.WaitUntilCRDManifestsReady(ctx, r.client, desiredCRD.Name); err != nil {
+				return fmt.Errorf("failed waiting for CRD %q to be ready: %w", desiredCRD.Name, err)
+			}
 		}
 	}
 

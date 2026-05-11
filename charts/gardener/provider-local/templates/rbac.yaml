@@ -59,6 +59,18 @@ rules:
   - update
   - delete
 - apiGroups:
+  - resources.gardener.cloud
+  resources:
+  - managedresourcedatas
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - patch
+  - update
+  - delete
+- apiGroups:
   - coordination.k8s.io
   resources:
   - leases

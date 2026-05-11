@@ -384,6 +384,9 @@ status:
 					SecretRefs: []corev1.LocalObjectReference{{
 						Name: managedResource.Spec.SecretRefs[0].Name,
 					}},
+					DataRefs: []corev1.LocalObjectReference{{
+						Name: managedResource.Spec.DataRefs[0].Name,
+					}},
 					KeepObjects: ptr.To(false),
 				},
 			}
@@ -398,6 +401,12 @@ status:
 			var err error
 			manifests, err = test.ExtractManifestsFromManagedResourceData(managedResourceSecret.Data)
 			Expect(err).NotTo(HaveOccurred())
+
+			managedResourceData := &resourcesv1alpha1.ManagedResourceData{ObjectMeta: metav1.ObjectMeta{Name: managedResource.Spec.DataRefs[0].Name, Namespace: namespace}}
+			Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(Succeed())
+			dataManifests, err := test.ExtractManifestsFromManagedResourceData(managedResourceData.Data)
+			Expect(err).NotTo(HaveOccurred())
+			manifests = append(manifests, dataManifests...)
 
 			serverSecret, found := sm.Get("metrics-server")
 			Expect(found).To(BeTrue())

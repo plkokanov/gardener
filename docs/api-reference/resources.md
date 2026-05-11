@@ -14,6 +14,9 @@ Resource Types:
 <li>
 <a href="#managedresource">ManagedResource</a>
 </li>
+<li>
+<a href="#managedresourcedata">ManagedResourceData</a>
+</li>
 </ul>
 
 <h3 id="managedresource">ManagedResource
@@ -71,6 +74,51 @@ Refer to the Kubernetes API documentation for the fields of the <code>metadata</
 </table>
 
 
+<h3 id="managedresourcedata">ManagedResourceData
+</h3>
+
+
+<p>
+ManagedResourceData holds non-sensitive rendered Kubernetes manifests referenced by a ManagedResource via spec.dataRefs.
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#objectmeta-v1-meta">ObjectMeta</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the <code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>data</code></br>
+<em>
+object (keys:string, values:integer array)
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Data contains the rendered manifests as compressed byte arrays.<br />Keys follow the same convention as Secret data keys (e.g., "data.yaml.br" for Brotli-compressed YAML).</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+
 <h3 id="managedresourcespec">ManagedResourceSpec
 </h3>
 
@@ -113,6 +161,18 @@ string
 </td>
 <td>
 <p>SecretRefs is a list of secret references.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>dataRefs</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#localobjectreference-v1-core">LocalObjectReference</a> array
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>DataRefs is a list of references to ManagedResourceData objects containing non-sensitive rendered manifests.</p>
 </td>
 </tr>
 <tr>

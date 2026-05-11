@@ -52,7 +52,12 @@ const (
 	// BrotliCompressionSuffix is the common suffix used for Brotli compression.
 	BrotliCompressionSuffix = ".br"
 	// CompressedDataKey is the name of a data key containing Brotli compressed YAML manifests.
+	// This key is used for Secret objects and stored in the backing Secret (preserves backward compatibility
+	// with existing immutable Secrets whose hash-based names depend on this key).
 	CompressedDataKey = "data.yaml" + BrotliCompressionSuffix
+	// CompressedPlainDataKey is the name of a data key containing Brotli compressed YAML manifests for non-Secret objects.
+	// This key is stored in ManagedResourceData objects.
+	CompressedPlainDataKey = "plain.data.yaml" + BrotliCompressionSuffix
 
 	// ManagedBy is a constant for a label on an object managed by a ManagedResource.
 	// It is set by the ManagedResource controller depending on its configuration. By default it is set to "gardener".
@@ -242,7 +247,11 @@ type ManagedResourceSpec struct {
 	// +optional
 	Class *string `json:"class,omitempty"`
 	// SecretRefs is a list of secret references.
-	SecretRefs []corev1.LocalObjectReference `json:"secretRefs"`
+	// +optional
+	SecretRefs []corev1.LocalObjectReference `json:"secretRefs,omitempty"`
+	// DataRefs is a list of references to ManagedResourceData objects containing non-sensitive rendered manifests.
+	// +optional
+	DataRefs []corev1.LocalObjectReference `json:"dataRefs,omitempty"`
 	// InjectLabels injects the provided labels into every resource that is part of the referenced secrets.
 	// +optional
 	InjectLabels map[string]string `json:"injectLabels,omitempty"`

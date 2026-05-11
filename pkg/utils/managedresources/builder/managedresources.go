@@ -85,6 +85,18 @@ func (m *ManagedResource) WithSecretRefs(secretRefs []corev1.LocalObjectReferenc
 	return m
 }
 
+// WithDataRef adds a reference with the given name to the DataRefs field.
+func (m *ManagedResource) WithDataRef(dataRefName string) *ManagedResource {
+	m.resource.Spec.DataRefs = append(m.resource.Spec.DataRefs, corev1.LocalObjectReference{Name: dataRefName})
+	return m
+}
+
+// WithDataRefs sets the DataRefs field.
+func (m *ManagedResource) WithDataRefs(dataRefs []corev1.LocalObjectReference) *ManagedResource {
+	m.resource.Spec.DataRefs = append(m.resource.Spec.DataRefs, dataRefs...)
+	return m
+}
+
 // WithInjectedLabels sets the InjectLabels field.
 func (m *ManagedResource) WithInjectedLabels(labelsToInject map[string]string) *ManagedResource {
 	m.resource.Spec.InjectLabels = labelsToInject
@@ -115,7 +127,7 @@ func (m *ManagedResource) DeletePersistentVolumeClaims(v bool) *ManagedResource 
 	return m
 }
 
-// Reconcile creates or updates the ManagedResource as well as marks all referenced secrets as garbage collectable.
+// Reconcile creates or updates the ManagedResource.
 func (m *ManagedResource) Reconcile(ctx context.Context) error {
 	resource := &resourcesv1alpha1.ManagedResource{
 		ObjectMeta: metav1.ObjectMeta{Name: m.resource.Name, Namespace: m.resource.Namespace},

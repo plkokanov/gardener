@@ -132,6 +132,9 @@ var _ = Describe("ResourceConfig", func() {
 							SecretRefs: []corev1.LocalObjectReference{{
 								Name: managedResource.Spec.SecretRefs[0].Name,
 							}},
+							DataRefs: []corev1.LocalObjectReference{{
+								Name: managedResource.Spec.DataRefs[0].Name,
+							}},
 							KeepObjects: ptr.To(false),
 						},
 					}
@@ -145,12 +148,18 @@ var _ = Describe("ResourceConfig", func() {
 				It("should destroy the expected resources", func() {
 					Expect(DeployResourceConfigs(ctx, fakeClient, namespace, clusterType, managedResourceName, managedResourceLabels, registry, allResources)).To(Succeed())
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(Succeed())
-					managedResourceSecret.Name = managedResource.Spec.SecretRefs[0].Name
-					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
+
+					managedResourceData := &resourcesv1alpha1.ManagedResourceData{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      managedResource.Spec.DataRefs[0].Name,
+							Namespace: namespace,
+						},
+					}
+					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(Succeed())
 
 					Expect(DestroyResourceConfigs(ctx, fakeClient, namespace, clusterType, managedResourceName, allResources)).To(Succeed())
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
-					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(BeNotFoundError())
+					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(BeNotFoundError())
 				})
 			})
 		})
@@ -180,6 +189,9 @@ var _ = Describe("ResourceConfig", func() {
 							SecretRefs: []corev1.LocalObjectReference{{
 								Name: managedResource.Spec.SecretRefs[0].Name,
 							}},
+							DataRefs: []corev1.LocalObjectReference{{
+								Name: managedResource.Spec.DataRefs[0].Name,
+							}},
 							KeepObjects: ptr.To(false),
 						},
 					}
@@ -199,9 +211,18 @@ var _ = Describe("ResourceConfig", func() {
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(obj1), obj1)).To(Succeed())
 
+					managedResourceData := &resourcesv1alpha1.ManagedResourceData{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      managedResource.Spec.DataRefs[0].Name,
+							Namespace: namespace,
+						},
+					}
+					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(Succeed())
+
 					Expect(DestroyResourceConfigs(ctx, fakeClient, namespace, clusterType, managedResourceName, allResources)).To(Succeed())
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(BeNotFoundError())
+					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceData), managedResourceData)).To(BeNotFoundError())
 					Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(obj1), obj1)).To(BeNotFoundError())
 				})
 			})

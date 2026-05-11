@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component"
 	. "github.com/gardener/gardener/pkg/component/autoscaling/vpa"
@@ -83,9 +84,9 @@ var _ = Describe("CRD", func() {
 		It("should ensure CRDs are included", func() {
 			dataMap, err := registry.SerializedObjects()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dataMap).To(HaveKey("data.yaml.br"))
+			Expect(dataMap).To(HaveKey(resourcesv1alpha1.CompressedDataKey))
 
-			compressedData := dataMap["data.yaml.br"]
+			compressedData := dataMap[resourcesv1alpha1.CompressedDataKey]
 			data, err := test.BrotliDecompression(compressedData)
 			Expect(err).NotTo(HaveOccurred())
 

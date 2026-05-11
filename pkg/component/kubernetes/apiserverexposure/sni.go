@@ -22,6 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	resourcemanagerconfigv1alpha1 "github.com/gardener/gardener/pkg/apis/config/resourcemanager/v1alpha1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -513,7 +514,9 @@ func (s *sni) reconcileIstioTLSSecrets(ctx context.Context, ownerNamespace *core
 		return fmt.Errorf("failed to generate kube-apiserver client certificate for istio: %w", err)
 	}
 
-	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+	log := logf.FromContext(ctx)
+
+	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer, log)
 
 	ownerNamespaceGVK, err := apiutil.GVKForObject(ownerNamespace, kubernetes.SeedScheme)
 	if err != nil {

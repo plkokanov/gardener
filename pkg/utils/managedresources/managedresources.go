@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	"go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,16 +93,25 @@ func NewForSeed(c client.Client, namespace, name string, keepObjects bool) *buil
 
 // NewSecret initiates a new immutable Secret object which can be reconciled.
 func NewSecret(client client.Client, namespace, name string, data map[string][]byte, secretNameWithPrefix bool) (string, *builder.Secret) {
-	secretName := secretName(name, secretNameWithPrefix)
+	secretName := resourceName(name, secretNameWithPrefix)
 	return builder.NewSecret(client).
 		WithNamespacedName(namespace, secretName).
 		WithKeyValues(data).
 		Unique()
 }
 
-// secretName returns the name of a corev1.Secret for the given name of a resourcesv1alpha1.ManagedResource. If
+// NewManagedResourceData initiates a new immutable Secret object which can be reconciled.
+func NewManagedResourceData(client client.Client, namespace, name string, data map[string][]byte, secretNameWithPrefix bool) (string, *builder.ManagedResourceDataBuilder) {
+	resourceName := resourceName(name, secretNameWithPrefix)
+	return builder.NewManagedResourceData(client).
+		WithNamespacedName(namespace, resourceName).
+		WithData(data).
+		BuilderAndName()
+}
+
+// resourceName returns the name of a corev1.Secret for the given name of a resourcesv1alpha1.ManagedResource. If
 // <withPrefix> is set then the name will be prefixed with 'managedresource-'.
-func secretName(name string, withPrefix bool) string {
+func resourceName(name string, withPrefix bool) string {
 	if withPrefix {
 		return SecretPrefix + name
 	}
@@ -119,18 +129,32 @@ func CreateFromUnstructured(
 	keepObjects bool,
 	injectedLabels map[string]string,
 ) error {
-	var data []byte
+	var (
+		secretData []byte
+		plainData  []byte
+	)
+
 	for _, obj := range objs {
 		bytes, err := obj.MarshalJSON()
 		if err != nil {
 			return fmt.Errorf("marshal failed for '%s/%s' for secret '%s/%s': %w", obj.GetNamespace(), obj.GetName(), namespace, name, err)
 		}
-		data = append(data, []byte("\n---\n")...)
-		data = append(data, bytes...)
+
+		if obj.GetKind() == "Secret" {
+			secretData = append(secretData, []byte("\n---\n")...)
+			secretData = append(secretData, bytes...)
+		} else {
+			plainData = append(plainData, []byte("\n---\n")...)
+			plainData = append(plainData, bytes...)
+		}
 	}
+
 	dataMap := map[string][]byte{}
-	if len(data) > 0 {
-		dataMap[name] = data
+	if len(secretData) > 0 {
+		dataMap[name] = secretData
+	}
+	if len(plainData) > 0 {
+		dataMap["plain."+name] = plainData
 	}
 	return Create(ctx, client, namespace, name, nil, secretNameWithPrefix, class, dataMap, &keepObjects, injectedLabels, ptr.To(false))
 }
@@ -149,11 +173,25 @@ func Update(
 	forceOverwriteAnnotations *bool,
 ) error {
 	var (
-		secretName, secret = NewSecret(client, namespace, name, data, secretNameWithPrefix)
-		managedResource    = New(client, namespace, name, class, keepObjects, labels, injectedLabels, forceOverwriteAnnotations).WithSecretRef(secretName).CreateIfNotExists(false)
+		secretData, plainData = splitDataIntoSecretAndPlain(data)
+		managedResource       = New(client, namespace, name, class, keepObjects, labels, injectedLabels, forceOverwriteAnnotations).CreateIfNotExists(false)
+		secretName            string
+		secret                *builder.Secret
+		mrDataName            string
+		mrData                *builder.ManagedResourceDataBuilder
 	)
 
-	return deployManagedResource(ctx, secret, managedResource)
+	if len(secretData) > 0 {
+		secretName, secret = NewSecret(client, namespace, name, secretData, secretNameWithPrefix)
+		managedResource = managedResource.WithSecretRef(secretName)
+	}
+
+	if len(plainData) > 0 {
+		mrDataName, mrData = NewManagedResourceData(client, namespace, name, plainData, secretNameWithPrefix)
+		managedResource = managedResource.WithDataRef(mrDataName)
+	}
+
+	return deployManagedResource(ctx, secret, mrData, managedResource)
 }
 
 // Create creates a managed resource and its secret with the given name, class, key, and data in the given namespace.
@@ -170,32 +208,90 @@ func Create(
 	forceOverwriteAnnotations *bool,
 ) error {
 	var (
-		secretName, secret = NewSecret(client, namespace, name, data, secretNameWithPrefix)
-		managedResource    = New(client, namespace, name, class, keepObjects, labels, injectedLabels, forceOverwriteAnnotations).WithSecretRef(secretName)
+		secretData, plainData = splitDataIntoSecretAndPlain(data)
+		managedResource       = New(client, namespace, name, class, keepObjects, labels, injectedLabels, forceOverwriteAnnotations)
+		secretName            string
+		secret                *builder.Secret
+		mrDataName            string
+		mrData                *builder.ManagedResourceDataBuilder
 	)
 
-	return deployManagedResource(ctx, secret, managedResource)
+	if len(secretData) > 0 {
+		secretName, secret = NewSecret(client, namespace, name, secretData, secretNameWithPrefix)
+		managedResource = managedResource.WithSecretRef(secretName)
+
+	}
+
+	if len(plainData) > 0 {
+		mrDataName, mrData = NewManagedResourceData(client, namespace, name, plainData, secretNameWithPrefix)
+		managedResource = managedResource.WithDataRef(mrDataName)
+	}
+
+	return deployManagedResource(ctx, secret, mrData, managedResource)
+}
+
+func splitDataIntoSecretAndPlain(data map[string][]byte) (secretData, plainData map[string][]byte) {
+	secretData = make(map[string][]byte)
+	plainData = make(map[string][]byte)
+
+	for key := range data {
+		if !strings.HasPrefix(key, "plain.") && (key == resourcesv1alpha1.CompressedDataKey || strings.Contains(key, "secret")) {
+			secretData[key] = data[key]
+		} else {
+			plainData[key] = data[key]
+		}
+	}
+
+	return secretData, plainData
 }
 
 // CreateForSeed deploys a ManagedResource CR for the seed's gardener-resource-manager.
 func CreateForSeed(ctx context.Context, client client.Client, namespace, name string, keepObjects bool, data map[string][]byte) error {
 	var (
-		secretName, secret = NewSecret(client, namespace, name, data, true)
-		managedResource    = NewForSeed(client, namespace, name, keepObjects).WithSecretRef(secretName)
+		secretData, plainData = splitDataIntoSecretAndPlain(data)
+		managedResource       = NewForSeed(client, namespace, name, keepObjects)
+		secretName            string
+		secret                *builder.Secret
+		mrDataName            string
+		mrData                *builder.ManagedResourceDataBuilder
 	)
 
-	return deployManagedResource(ctx, secret, managedResource)
+	if len(secretData) > 0 {
+		secretName, secret = NewSecret(client, namespace, name, secretData, true)
+		managedResource = managedResource.WithSecretRef(secretName)
+	}
+
+	if len(plainData) > 0 {
+		mrDataName, mrData = NewManagedResourceData(client, namespace, name, plainData, true)
+		managedResource = managedResource.WithDataRef(mrDataName)
+	}
+
+	return deployManagedResource(ctx, secret, mrData, managedResource)
 }
 
 // CreateForSeedWithLabels deploys a ManagedResource CR for the seed's gardener-resource-manager and allows providing
 // additional labels.
 func CreateForSeedWithLabels(ctx context.Context, client client.Client, namespace, name string, keepObjects bool, labels map[string]string, data map[string][]byte) error {
 	var (
-		secretName, secret = NewSecret(client, namespace, name, data, true)
-		managedResource    = NewForSeed(client, namespace, name, keepObjects).WithSecretRef(secretName).WithLabels(labels)
+		secretData, plainData = splitDataIntoSecretAndPlain(data)
+		managedResource       = NewForSeed(client, namespace, name, keepObjects).WithLabels(labels)
+		secretName            string
+		secret                *builder.Secret
+		mrDataName            string
+		mrData                *builder.ManagedResourceDataBuilder
 	)
 
-	return deployManagedResource(ctx, secret, managedResource)
+	if len(secretData) > 0 {
+		secretName, secret = NewSecret(client, namespace, name, secretData, true)
+		managedResource = managedResource.WithSecretRef(secretName)
+	}
+
+	if len(plainData) > 0 {
+		mrDataName, mrData = NewManagedResourceData(client, namespace, name, plainData, true)
+		managedResource = managedResource.WithDataRef(mrDataName)
+	}
+
+	return deployManagedResource(ctx, secret, mrData, managedResource)
 }
 
 // CreateForShoot deploys a ManagedResource CR for the shoot's gardener-resource-manager.
@@ -204,11 +300,25 @@ func CreateForSeedWithLabels(ctx context.Context, client client.Client, namespac
 // of this function should provide their own unique origin value.
 func CreateForShoot(ctx context.Context, client client.Client, namespace, name, origin string, keepObjects bool, data map[string][]byte) error {
 	var (
-		secretName, secret = NewSecret(client, namespace, name, data, true)
-		managedResource    = NewForShoot(client, namespace, name, origin, keepObjects).WithSecretRef(secretName)
+		secretData, plainData = splitDataIntoSecretAndPlain(data)
+		managedResource       = NewForShoot(client, namespace, name, origin, keepObjects)
+		secretName            string
+		secret                *builder.Secret
+		mrDataName            string
+		mrData                *builder.ManagedResourceDataBuilder
 	)
 
-	return deployManagedResource(ctx, secret, managedResource)
+	if len(secretData) > 0 {
+		secretName, secret = NewSecret(client, namespace, name, secretData, true)
+		managedResource = managedResource.WithSecretRef(secretName)
+	}
+
+	if len(plainData) > 0 {
+		mrDataName, mrData = NewManagedResourceData(client, namespace, name, plainData, true)
+		managedResource = managedResource.WithDataRef(mrDataName)
+	}
+
+	return deployManagedResource(ctx, secret, mrData, managedResource)
 }
 
 // CreateForShootWithLabels deploys a ManagedResource CR for the shoot's gardener-resource-manager. The origin is used
@@ -217,16 +327,38 @@ func CreateForShoot(ctx context.Context, client client.Client, namespace, name, 
 // This function allows providing additional labels.
 func CreateForShootWithLabels(ctx context.Context, client client.Client, namespace, name, origin string, keepObjects bool, labels map[string]string, data map[string][]byte) error {
 	var (
-		secretName, secret = NewSecret(client, namespace, name, data, true)
-		managedResource    = NewForShoot(client, namespace, name, origin, keepObjects).WithSecretRef(secretName).WithLabels(labels)
+		secretData, plainData = splitDataIntoSecretAndPlain(data)
+		managedResource       = NewForShoot(client, namespace, name, origin, keepObjects).WithLabels(labels)
+		secretName            string
+		secret                *builder.Secret
+		mrDataName            string
+		mrData                *builder.ManagedResourceDataBuilder
 	)
 
-	return deployManagedResource(ctx, secret, managedResource)
+	if len(secretData) > 0 {
+		secretName, secret = NewSecret(client, namespace, name, secretData, true)
+		managedResource = managedResource.WithSecretRef(secretName)
+	}
+
+	if len(plainData) > 0 {
+		mrDataName, mrData = NewManagedResourceData(client, namespace, name, plainData, true)
+		managedResource = managedResource.WithDataRef(mrDataName)
+	}
+
+	return deployManagedResource(ctx, secret, mrData, managedResource)
 }
 
-func deployManagedResource(ctx context.Context, secret *builder.Secret, managedResource *builder.ManagedResource) error {
-	if err := secret.Reconcile(ctx); err != nil {
-		return fmt.Errorf("could not create or update secret of managed resources: %w", err)
+func deployManagedResource(ctx context.Context, secret *builder.Secret, mrData *builder.ManagedResourceDataBuilder, managedResource *builder.ManagedResource) error {
+	if secret != nil {
+		if err := secret.Reconcile(ctx); err != nil {
+			return fmt.Errorf("could not create or update secret of managed resources: %w", err)
+		}
+	}
+
+	if mrData != nil {
+		if err := mrData.Reconcile(ctx); err != nil {
+			return fmt.Errorf("could not create or update managed resource data: %w", err)
+		}
 	}
 
 	if err := managedResource.Reconcile(ctx); err != nil {
@@ -242,7 +374,7 @@ func Delete(ctx context.Context, c client.Client, namespace string, name string,
 	// This is done in order to guarantee backwards compatibility with previous versions of this library
 	// when the underlying mananaged resource secrets were not immutable and not garbage collectable.
 	// For more details, please see https://github.com/gardener/gardener/pull/8116
-	secretName := secretName(name, secretNameWithPrefix)
+	secretName := resourceName(name, secretNameWithPrefix)
 
 	mr := &resourcesv1alpha1.ManagedResource{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 	mrKey := client.ObjectKeyFromObject(mr)
@@ -273,6 +405,16 @@ func Delete(ctx context.Context, c client.Client, namespace string, name string,
 	for _, s := range secretsToDelete {
 		if err := client.IgnoreNotFound(c.Delete(ctx, s)); err != nil {
 			return fmt.Errorf("could not delete secret '%s' of managed resource: %w", client.ObjectKeyFromObject(s).String(), err)
+		}
+	}
+
+	for _, dataRef := range mr.Spec.DataRefs {
+		mrd := &resourcesv1alpha1.ManagedResourceData{ObjectMeta: metav1.ObjectMeta{
+			Name:      dataRef.Name,
+			Namespace: namespace,
+		}}
+		if err := client.IgnoreNotFound(c.Delete(ctx, mrd)); err != nil {
+			return fmt.Errorf("could not delete ManagedResourceData '%s' of managed resource: %w", client.ObjectKeyFromObject(mrd).String(), err)
 		}
 	}
 
@@ -404,13 +546,13 @@ func RenderChartAndCreate(ctx context.Context, namespace string, name string, se
 		return fmt.Errorf("could not render chart: %w", err)
 	}
 
-	// Create or update managed resource referencing the previously created secret
 	var injectedLabels map[string]string
 	if withNoCleanupLabel {
 		injectedLabels = map[string]string{v1beta1constants.ShootNoCleanup: "true"}
 	}
 
-	return Create(ctx, client, namespace, name, nil, secretNameWithPrefix, "", map[string][]byte{chartName: data}, ptr.To(false), injectedLabels, &forceOverwriteAnnotations)
+	dataMap := splitManifestsIntoDataMap(chartName, data)
+	return Create(ctx, client, namespace, name, nil, secretNameWithPrefix, "", dataMap, ptr.To(false), injectedLabels, &forceOverwriteAnnotations)
 }
 
 // RenderChartAndCreateForSeed renders a chart and creates a ManagedResource for the gardener-resource-manager
@@ -421,7 +563,48 @@ func RenderChartAndCreateForSeed(ctx context.Context, namespace string, name str
 		return fmt.Errorf("could not render chart: %w", err)
 	}
 
-	return Create(ctx, client, namespace, name, nil, false, v1beta1constants.SeedResourceManagerClass, map[string][]byte{chartName: data}, nil, nil, nil)
+	dataMap := splitManifestsIntoDataMap(chartName, data)
+	return Create(ctx, client, namespace, name, nil, false, v1beta1constants.SeedResourceManagerClass, dataMap, nil, nil, nil)
+}
+
+// splitManifestsIntoDataMap splits raw YAML manifests into secret and plain data map entries.
+// Secret manifests go under keyName (preserves backward compat), non-Secret manifests under "plain."+keyName.
+func splitManifestsIntoDataMap(keyName string, rawYAML []byte) map[string][]byte {
+	var secretData, plainData []byte
+
+	for doc := range strings.SplitSeq(string(rawYAML), "\n---\n") {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+		if isSecretManifest(doc) {
+			secretData = append(secretData, []byte("\n---\n")...)
+			secretData = append(secretData, []byte(doc)...)
+		} else {
+			plainData = append(plainData, []byte("\n---\n")...)
+			plainData = append(plainData, []byte(doc)...)
+		}
+	}
+
+	dataMap := make(map[string][]byte)
+	if len(secretData) > 0 {
+		dataMap[keyName] = secretData
+	}
+	if len(plainData) > 0 {
+		dataMap["plain."+keyName] = plainData
+	}
+	return dataMap
+}
+
+func isSecretManifest(doc string) bool {
+	// TODO(plkokanov): Check if some functions from the resource manager can be reused instead directly unmarshalling here.
+	type typeMeta struct {
+		Kind string `yaml:"kind"`
+	}
+	var meta typeMeta
+	if err := yaml.Unmarshal([]byte(doc), &meta); err != nil {
+		return false
+	}
+	return meta.Kind == "Secret"
 }
 
 // configurationProblemRegex is used to check if an error is caused by a bad managed resource configuration.
@@ -481,28 +664,47 @@ func GetObjects(ctx context.Context, c client.Client, namespace, name string) ([
 		objects = append(objects, objectsFromSecret...)
 	}
 
+	for _, dataRef := range managedResource.Spec.DataRefs {
+		mrd := &resourcesv1alpha1.ManagedResourceData{}
+		if err := c.Get(ctx, client.ObjectKey{Name: dataRef.Name, Namespace: managedResource.Namespace}, mrd); err != nil {
+			return nil, fmt.Errorf("could not get ManagedResourceData %q: %w", client.ObjectKey{Name: dataRef.Name, Namespace: managedResource.Namespace}, err)
+		}
+
+		objectsFromData, err := ExtractObjectsFromData(decoder, mrd.Data)
+		if err != nil {
+			return nil, fmt.Errorf("could not extract objects from ManagedResourceData %q: %w", client.ObjectKeyFromObject(mrd), err)
+		}
+
+		objects = append(objects, objectsFromData...)
+	}
+
 	return objects, nil
 }
 
 // ExtractObjectsFromSecret extracts and decodes all objects stored in the given secret.
 func ExtractObjectsFromSecret(decoder runtime.Decoder, secret *corev1.Secret) ([]client.Object, error) {
+	return ExtractObjectsFromData(decoder, secret.Data)
+}
+
+// ExtractObjectsFromData extracts and decodes all objects stored in the given data map.
+func ExtractObjectsFromData(decoder runtime.Decoder, data map[string][]byte) ([]client.Object, error) {
 	var objects []client.Object
 
-	for key, value := range secret.Data {
-		var data []byte
+	for key, value := range data {
+		var decompressed []byte
 
 		if strings.HasSuffix(key, resourcesv1alpha1.BrotliCompressionSuffix) {
 			reader := brotli.NewReader(bytes.NewReader(value))
 			var err error
-			data, err = io.ReadAll(reader)
+			decompressed, err = io.ReadAll(reader)
 			if err != nil {
 				return nil, fmt.Errorf("could not read brotli compressed data from key %q: %w", key, err)
 			}
 		} else {
-			data = value
+			decompressed = value
 		}
 
-		for objRaw := range strings.SplitSeq(string(data), "---\n") {
+		for objRaw := range strings.SplitSeq(string(decompressed), "---\n") {
 			if strings.TrimSpace(objRaw) == "" {
 				continue
 			}

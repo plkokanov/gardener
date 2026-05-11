@@ -694,6 +694,7 @@ var _ = Describe("GardenerDiscoveryServer", func() {
 					Spec: resourcesv1alpha1.ManagedResourceSpec{
 						Class:       ptr.To("seed"),
 						SecretRefs:  []corev1.LocalObjectReference{{Name: managedResourceRuntime.Spec.SecretRefs[0].Name}},
+						DataRefs:    []corev1.LocalObjectReference{{Name: managedResourceRuntime.Spec.DataRefs[0].Name}},
 						KeepObjects: ptr.To(false),
 					},
 					Status: healthyManagedResourceStatus,
@@ -719,6 +720,7 @@ var _ = Describe("GardenerDiscoveryServer", func() {
 					Spec: resourcesv1alpha1.ManagedResourceSpec{
 						InjectLabels: map[string]string{"shoot.gardener.cloud/no-cleanup": "true"},
 						SecretRefs:   []corev1.LocalObjectReference{{Name: managedResourceVirtual.Spec.SecretRefs[0].Name}},
+						DataRefs:     []corev1.LocalObjectReference{{Name: managedResourceVirtual.Spec.DataRefs[0].Name}},
 						KeepObjects:  ptr.To(false),
 					},
 					Status: healthyManagedResourceStatus,

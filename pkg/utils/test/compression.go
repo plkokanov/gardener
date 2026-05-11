@@ -63,21 +63,29 @@ func BrotliDecompression(data []byte) ([]byte, error) {
 // ExtractManifestsFromManagedResourceData extracts the resources from the given compressed data,
 // usually used for ManagedResources.
 func ExtractManifestsFromManagedResourceData(data map[string][]byte) ([]string, error) {
-	compressedData, ok := data[resourcesv1alpha1.CompressedDataKey]
-	if !ok {
-		return nil, fmt.Errorf("failed to extract manifests, data key %s not found", resourcesv1alpha1.CompressedDataKey)
-	}
-
-	uncompressedData, err := BrotliDecompression(compressedData)
-	if err != nil {
-		return nil, err
-	}
-
 	var manifests []string
-	for manifest := range strings.SplitSeq(string(uncompressedData), "---\n") {
-		if manifest != "" {
-			manifests = append(manifests, manifest)
+
+	for key, value := range data {
+		var raw []byte
+		if strings.HasSuffix(key, resourcesv1alpha1.BrotliCompressionSuffix) {
+			var err error
+			raw, err = BrotliDecompression(value)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			raw = value
 		}
+
+		for manifest := range strings.SplitSeq(string(raw), "---\n") {
+			if manifest != "" {
+				manifests = append(manifests, manifest)
+			}
+		}
+	}
+
+	if len(manifests) == 0 {
+		return nil, fmt.Errorf("failed to extract manifests, no data found")
 	}
 
 	return manifests, nil

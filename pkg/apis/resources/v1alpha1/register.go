@@ -37,6 +37,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&ManagedResource{},
 		&ManagedResourceList{},
+		&ManagedResourceData{},
+		&ManagedResourceDataList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 

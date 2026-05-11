@@ -572,6 +572,9 @@ var _ = Describe("OpenTelemetry Collector", func() {
 					SecretRefs: []corev1.LocalObjectReference{{
 						Name: customResourcesManagedResource.Spec.SecretRefs[0].Name,
 					}},
+					DataRefs: []corev1.LocalObjectReference{{
+						Name: customResourcesManagedResource.Spec.DataRefs[0].Name,
+					}},
 					KeepObjects: ptr.To(false),
 				},
 			}
@@ -632,6 +635,9 @@ var _ = Describe("OpenTelemetry Collector", func() {
 					Class: ptr.To("seed"),
 					SecretRefs: []corev1.LocalObjectReference{{
 						Name: customResourcesManagedResource.Spec.SecretRefs[0].Name,
+					}},
+					DataRefs: []corev1.LocalObjectReference{{
+						Name: customResourcesManagedResource.Spec.DataRefs[0].Name,
 					}},
 					KeepObjects: ptr.To(false),
 				},

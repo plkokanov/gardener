@@ -709,6 +709,7 @@ honor_labels: true`
 					Spec: resourcesv1alpha1.ManagedResourceSpec{
 						Class:       ptr.To("seed"),
 						SecretRefs:  []corev1.LocalObjectReference{{Name: managedResource.Spec.SecretRefs[0].Name}},
+						DataRefs:    []corev1.LocalObjectReference{{Name: managedResource.Spec.DataRefs[0].Name}},
 						KeepObjects: ptr.To(false),
 					},
 					Status: healthyManagedResourceStatus,
@@ -716,12 +717,9 @@ honor_labels: true`
 				utilruntime.Must(references.InjectAnnotations(expectedRuntimeMr))
 				Expect(managedResource).To(Equal(expectedRuntimeMr))
 
-				managedResourceSecret.Name = managedResource.Spec.SecretRefs[0].Name
-				Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
-
-				Expect(managedResourceSecret.Type).To(Equal(corev1.SecretTypeOpaque))
-				Expect(managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
-				Expect(managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
+				managedResourceData := &resourcesv1alpha1.ManagedResourceData{}
+				Expect(fakeClient.Get(ctx, client.ObjectKey{Name: managedResource.Spec.DataRefs[0].Name, Namespace: namespace}, managedResourceData)).To(Succeed())
+				Expect(managedResourceData.Data).NotTo(BeEmpty())
 			})
 
 			It("should successfully deploy all resources", func() {
@@ -1528,15 +1526,12 @@ query_range:
 	Describe("#Destroy", func() {
 		It("should successfully destroy all resources", func() {
 			Expect(fakeClient.Create(ctx, managedResource)).To(Succeed())
-			Expect(fakeClient.Create(ctx, managedResourceSecret)).To(Succeed())
 
 			Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(Succeed())
-			Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
 
 			Expect(deployer.Destroy(ctx)).To(Succeed())
 
 			Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
-			Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(BeNotFoundError())
 		})
 	})
 

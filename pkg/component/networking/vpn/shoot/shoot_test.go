@@ -859,6 +859,7 @@ var _ = Describe("VPNShoot", func() {
 				Spec: resourcesv1alpha1.ManagedResourceSpec{
 					InjectLabels: map[string]string{"shoot.gardener.cloud/no-cleanup": "true"},
 					SecretRefs:   []corev1.LocalObjectReference{{Name: managedResource.Spec.SecretRefs[0].Name}},
+					DataRefs:     []corev1.LocalObjectReference{{Name: managedResource.Spec.DataRefs[0].Name}},
 					KeepObjects:  ptr.To(false),
 				},
 			}

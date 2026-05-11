@@ -180,6 +180,9 @@ var _ = Describe("Vali", func() {
 						SecretRefs: []corev1.LocalObjectReference{{
 							Name: managedResource.Spec.SecretRefs[0].Name,
 						}},
+						DataRefs: []corev1.LocalObjectReference{{
+							Name: managedResource.Spec.DataRefs[0].Name,
+						}},
 						KeepObjects: ptr.To(false),
 					},
 				}

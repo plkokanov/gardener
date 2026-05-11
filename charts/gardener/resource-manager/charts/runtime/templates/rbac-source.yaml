@@ -27,6 +27,14 @@ rules:
   - patch
   - update
 - apiGroups:
+  - resources.gardener.cloud
+  resources:
+  - managedresourcedatas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ""
   resources:
   - secrets

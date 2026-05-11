@@ -41,6 +41,8 @@ const (
 	KindConfigMap = "configmap"
 	// KindSecret is a constant for the 'secret' kind used in reference annotations.
 	KindSecret = "secret"
+	// KindManagedResourceData is a constant for the 'managedresourcedata' kind used in reference annotations.
+	KindManagedResourceData = "managedresourcedata"
 )
 
 // AnnotationKey computes a reference annotation key based on the given object kind and object name.
@@ -143,7 +145,10 @@ func InjectAnnotations(obj runtime.Object, additional ...string) error {
 		o.Spec.JobTemplate.Spec.Template.Annotations = mergeAnnotations(o.Spec.JobTemplate.Spec.Template.Annotations, referenceAnnotations)
 
 	case *resourcesv1alpha1.ManagedResource:
-		referenceAnnotations := computeAnnotationsFromLocalObjRefs(o.Spec.SecretRefs, KindSecret, additional...)
+		referenceAnnotations := utils.MergeStringMaps(
+			computeAnnotationsFromLocalObjRefs(o.Spec.SecretRefs, KindSecret, additional...),
+			computeAnnotationsFromLocalObjRefs(o.Spec.DataRefs, KindManagedResourceData),
+		)
 		o.Annotations = mergeAnnotations(o.Annotations, referenceAnnotations)
 
 	case *monitoringv1.Prometheus:

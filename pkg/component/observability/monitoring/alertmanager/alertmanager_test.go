@@ -508,6 +508,9 @@ var _ = Describe("Alertmanager", func() {
 				},
 				Status: healthyManagedResourceStatus,
 			}
+			if len(managedResource.Spec.DataRefs) > 0 {
+				expectedRuntimeMr.Spec.DataRefs = []corev1.LocalObjectReference{{Name: managedResource.Spec.DataRefs[0].Name}}
+			}
 			utilruntime.Must(references.InjectAnnotations(expectedRuntimeMr))
 			Expect(managedResource).To(Equal(expectedRuntimeMr))
 

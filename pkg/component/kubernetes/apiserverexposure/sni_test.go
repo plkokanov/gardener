@@ -812,6 +812,9 @@ func validateManagedResourceAndGetData(ctx context.Context, c client.Client, exp
 	managedResource := &resourcesv1alpha1.ManagedResource{}
 	ExpectWithOffset(1, c.Get(ctx, client.ObjectKeyFromObject(expectedManagedResource), managedResource)).To(Succeed())
 	expectedManagedResource.Spec.SecretRefs = []corev1.LocalObjectReference{{Name: managedResource.Spec.SecretRefs[0].Name}}
+	if len(managedResource.Spec.DataRefs) > 0 {
+		expectedManagedResource.Spec.DataRefs = []corev1.LocalObjectReference{{Name: managedResource.Spec.DataRefs[0].Name}}
+	}
 	utilruntime.Must(references.InjectAnnotations(expectedManagedResource))
 	ExpectWithOffset(1, managedResource).To(DeepEqual(expectedManagedResource))
 
@@ -821,10 +824,9 @@ func validateManagedResourceAndGetData(ctx context.Context, c client.Client, exp
 	ExpectWithOffset(1, managedResourceSecret.Immutable).To(Equal(ptr.To(true)))
 	ExpectWithOffset(1, managedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
 	ExpectWithOffset(1, managedResourceSecret.Data).To(HaveLen(1))
-	ExpectWithOffset(1, managedResourceSecret.Data).To(HaveKey("data.yaml.br"))
 
-	mrData, err := test.BrotliDecompression(managedResourceSecret.Data["data.yaml.br"])
+	manifests, err := test.ExtractManifestsFromManagedResourceData(managedResourceSecret.Data)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-	return mrData
+	return []byte(strings.Join(manifests, "---\n"))
 }
