@@ -6,9 +6,11 @@ package pvcautoscaler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -31,7 +33,10 @@ import (
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
+	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
+	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
 
 const (
@@ -41,6 +46,11 @@ const (
 	name            = "pvc-autoscaler"
 	metricsPortName = "metrics"
 	metricsPort     = int32(8080)
+	webhookPortName = "webhook"
+	webhookPort     = int32(9443)
+
+	volumeMountPathCertificates = "/tmp/k8s-webhook-server/serving-certs"
+	volumeNameCertificates      = "pvca-tls-certs"
 )
 
 // Values keeps values for the PVCAutoscaler.
@@ -51,40 +61,71 @@ type Values struct {
 	PriorityClassName string
 	// IsGardenCluster specifies if PVCAutoscaler is being deployed in a cluster registered as a Garden.
 	IsGardenCluster bool
+	// SecretNameServerCA is the name of the server CA secret.
+	SecretNameServerCA string
 }
 
 type pvcAutoscaler struct {
-	client    client.Client
-	namespace string
-	values    Values
+	client         client.Client
+	namespace      string
+	secretsManager secretsmanager.Interface
+	values         Values
+
+	caSecretName                     string
+	caBundle                         []byte
+	serverSecretName                 string
+	genericTokenKubeconfigSecretName *string
 }
 
 // NewPVCAutoscaler creates a new instance of PVCAutoscaler.
 func NewPVCAutoscaler(
 	client client.Client,
 	namespace string,
+	secretsManager secretsmanager.Interface,
 	values Values,
 ) component.DeployWaiter {
 	return &pvcAutoscaler{
-		client:    client,
-		namespace: namespace,
-		values:    values,
+		client:         client,
+		namespace:      namespace,
+		secretsManager: secretsManager,
+		values:         values,
 	}
 }
 
 func (p *pvcAutoscaler) Deploy(ctx context.Context) error {
+	caSecret, found := p.secretsManager.Get(p.values.SecretNameServerCA)
+	if !found {
+		return fmt.Errorf("secret %q not found", p.values.SecretNameServerCA)
+	}
+	p.caSecretName = caSecret.Name
+	p.caBundle = caSecret.Data[secretsutils.DataKeyCertificateBundle]
+
+	serverSecret, err := p.secretsManager.Generate(ctx, &secretsutils.CertificateSecretConfig{
+		Name:                        "vpa-admission-controller-server",
+		CommonName:                  fmt.Sprintf("%s.%s.svc", p.name()+"-webhook", p.namespace),
+		DNSNames:                    kubernetesutils.DNSNamesForService(p.name()+"-webhook", p.namespace),
+		CertType:                    secretsutils.ServerCert,
+		SkipPublishingCACertificate: true,
+	}, secretsmanager.SignedByCA(p.values.SecretNameServerCA, secretsmanager.UseCurrentCA), secretsmanager.Rotate(secretsmanager.InPlace))
+	if err != nil {
+		return err
+	}
+	p.serverSecretName = serverSecret.Name
+
 	var (
-		registry           = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
-		serviceAccount     = p.serviceAccount()
-		clusterRole        = p.clusterRole()
-		clusterRoleBinding = p.clusterRoleBinding()
-		role               = p.role()
-		roleBinding        = p.roleBinding()
-		service            = p.service()
-		deployment         = p.deployment()
-		pdb                = p.podDisruptionBudget()
-		vpa                = p.verticalPodAutoscaler()
-		serviceMonitor     = p.serviceMonitor()
+		registry                     = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+		serviceAccount               = p.serviceAccount()
+		clusterRole                  = p.clusterRole()
+		clusterRoleBinding           = p.clusterRoleBinding()
+		role                         = p.role()
+		roleBinding                  = p.roleBinding()
+		service                      = p.service()
+		webhookService               = p.webhookService()
+		deployment                   = p.deployment()
+		pdb                          = p.podDisruptionBudget()
+		vpa                          = p.verticalPodAutoscaler()
+		serviceMonitor               = p.serviceMonitor()
+		mutatingWebhookConfiguration = p.mutatingWebhookConfiguration()
 	)
 
 	metricsNetworkPolicyPort := networkingv1.NetworkPolicyPort{
@@ -105,6 +146,8 @@ func (p *pvcAutoscaler) Deploy(ctx context.Context) error {
 		roleBinding,
 		service,
 		deployment,
+		webhookService,
+		mutatingWebhookConfiguration,
 		pdb,
 		vpa,
 		serviceMonitor,
@@ -214,7 +257,12 @@ func (p *pvcAutoscaler) clusterRole() *rbacv1.ClusterRole {
 			{
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
-				Verbs:     []string{"get", "list", "watch"},
+				Verbs:     []string{"get", "list", "watch", "patch", "update"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods/eviction"},
+				Verbs:     []string{"create"},
 			},
 			{
 				APIGroups: []string{""},
@@ -329,6 +377,37 @@ func (p *pvcAutoscaler) service() *corev1.Service {
 	}
 }
 
+func (p *pvcAutoscaler) webhookService() *corev1.Service {
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      p.name() + "-webhook",
+			Namespace: p.namespace,
+			Labels:    p.getLabels(),
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:       webhookPortName,
+					Port:       int32(443),
+					Protocol:   corev1.ProtocolTCP,
+					TargetPort: intstr.FromString(webhookPortName),
+				},
+			},
+			Selector: p.getLabels(),
+		},
+	}
+
+	metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingFromWorldToPorts, fmt.Sprintf(`[{"protocol":"TCP","port":%d}]`, webhookPort))
+	if p.values.IsGardenCluster {
+		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForWebhookTargets(service, networkingv1.NetworkPolicyPort{
+			Port:     new(intstr.FromInt32(webhookPort)),
+			Protocol: new(corev1.ProtocolTCP),
+		}))
+	}
+
+	return service
+}
+
 func (p *pvcAutoscaler) deployment() *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -375,12 +454,6 @@ func (p *pvcAutoscaler) deployment() *appsv1.Deployment {
 								"--interval=60s",
 								"--prometheus-address=http://" + p.prometheusServiceName() + "." + p.namespace + ".svc.cluster.local:80",
 							},
-							Env: []corev1.EnvVar{
-								{
-									Name:  "ENABLE_WEBHOOKS",
-									Value: "false",
-								},
-							},
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "health",
@@ -390,6 +463,11 @@ func (p *pvcAutoscaler) deployment() *appsv1.Deployment {
 								{
 									Name:          metricsPortName,
 									ContainerPort: metricsPort,
+									Protocol:      corev1.ProtocolTCP,
+								},
+								{
+									Name:          webhookPortName,
+									ContainerPort: webhookPort,
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
@@ -424,8 +502,52 @@ func (p *pvcAutoscaler) deployment() *appsv1.Deployment {
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: new(false),
 							},
+							VolumeMounts: []corev1.VolumeMount{{
+								Name:      volumeNameCertificates,
+								MountPath: volumeMountPathCertificates,
+								ReadOnly:  true,
+							},
+							},
 						},
 					},
+					Volumes: []corev1.Volume{{
+						Name: volumeNameCertificates,
+						VolumeSource: corev1.VolumeSource{
+							Projected: &corev1.ProjectedVolumeSource{
+								DefaultMode: new(int32(420)),
+								Sources: []corev1.VolumeProjection{
+									{
+										Secret: &corev1.SecretProjection{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: p.caSecretName,
+											},
+											Items: []corev1.KeyToPath{{
+												Key:  secretsutils.DataKeyCertificateBundle,
+												Path: secretsutils.DataKeyCertificateBundle,
+											}},
+										},
+									},
+									{
+										Secret: &corev1.SecretProjection{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: p.serverSecretName,
+											},
+											Items: []corev1.KeyToPath{
+												{
+													Key:  secretsutils.DataKeyCertificate,
+													Path: secretsutils.DataKeyCertificate,
+												},
+												{
+													Key:  secretsutils.DataKeyPrivateKey,
+													Path: secretsutils.DataKeyPrivateKey,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					}},
 				},
 			},
 		},
@@ -505,4 +627,52 @@ func (p *pvcAutoscaler) serviceMonitor() *monitoringv1.ServiceMonitor {
 			}},
 		},
 	}
+}
+
+func (p *pvcAutoscaler) mutatingWebhookConfiguration() *admissionregistrationv1.MutatingWebhookConfiguration {
+	var (
+		mutatingWebhookConfiguration = &admissionregistrationv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: p.name() + "-webhook"}}
+
+		failurePolicy      = admissionregistrationv1.Ignore
+		matchPolicy        = admissionregistrationv1.Exact
+		reinvocationPolicy = admissionregistrationv1.IfNeededReinvocationPolicy
+		sideEffects        = admissionregistrationv1.SideEffectClassNone
+		scope              = admissionregistrationv1.AllScopes
+
+		clientConfig = admissionregistrationv1.WebhookClientConfig{
+			CABundle: p.caBundle,
+		}
+	)
+
+	clientConfig.Service = &admissionregistrationv1.ServiceReference{
+		Name:      p.name() + "-webhook",
+		Namespace: p.namespace,
+		Port:      new(int32(443)),
+		Path:      new("/mutate--v1-pod"),
+	}
+
+	metav1.SetMetaDataLabel(&mutatingWebhookConfiguration.ObjectMeta, v1beta1constants.LabelExcludeWebhookFromRemediation, "true")
+	mutatingWebhookConfiguration.Webhooks = []admissionregistrationv1.MutatingWebhook{{
+		Name:                    "mpod.autoscaling.gardener.cloud",
+		AdmissionReviewVersions: []string{"v1"},
+		ClientConfig:            clientConfig,
+		FailurePolicy:           &failurePolicy,
+		MatchPolicy:             &matchPolicy,
+		ReinvocationPolicy:      &reinvocationPolicy,
+		SideEffects:             &sideEffects,
+		TimeoutSeconds:          new(int32(10)),
+		Rules: []admissionregistrationv1.RuleWithOperations{
+			{
+				Rule: admissionregistrationv1.Rule{
+					APIGroups:   []string{""},
+					APIVersions: []string{"v1"},
+					Resources:   []string{"pods"},
+					Scope:       &scope,
+				},
+				Operations: []admissionregistrationv1.OperationType{admissionregistrationv1.Create},
+			},
+		},
+	}}
+
+	return mutatingWebhookConfiguration
 }

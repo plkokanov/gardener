@@ -37,7 +37,7 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.2.0
 	github.com/miekg/dns v1.1.73
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/onsi/ginkgo/v2 v2.32.1
+	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	github.com/open-telemetry/opentelemetry-operator/apis v0.158.0
 	github.com/opencontainers/image-spec v1.1.1
@@ -97,6 +97,8 @@ require (
 )
 
 replace github.com/gardener/gardener/pkg/apis => ./pkg/apis
+
+replace github.com/gardener/pvc-autoscaler => /Users/i077286/SAPDevelop/go/src/github.com/gardener/pvc-autoscaler
 
 // TODO(marc1404): Drop this line once test fixtures have been updated to match the new serialization behavior past v4.0.0-rc.2
 replace go.yaml.in/yaml/v4 => go.yaml.in/yaml/v4 v4.0.0-rc.2

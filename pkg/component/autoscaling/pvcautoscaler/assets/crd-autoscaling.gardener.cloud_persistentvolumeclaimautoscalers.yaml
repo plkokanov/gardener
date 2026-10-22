@@ -129,6 +129,17 @@ spec:
                             This ensures that the change in capacity is at least this amount, regardless of the percentage.
                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                           x-kubernetes-int-or-string: true
+                        resizeStrategy:
+                          default: PreferInPlace
+                          description: |-
+                            ResizeStrategy defines the strategy that will be used to resize the targeted PVC objects.
+                            With PreferInPlace (the default) the autoscaler additionally recovers PVCs whose in-place
+                            resize failed by evicting the Pods using them so the volume can be resized offline.
+                          enum:
+                          - InPlace
+                          - "Off"
+                          - PreferInPlace
+                          type: string
                         stepPercent:
                           default: 10
                           description: StepPercent specifies the percentage by which
@@ -216,21 +227,6 @@ spec:
                   - type
                   type: object
                 type: array
-              lastCheck:
-                description: |-
-                  LastCheck specifies the last time the PVC was checked by the controller.
-
-                  Deprecated: this field is deprecated and is no longer maintained by the pvc-autoscaler. It will be removed in a future release.
-                format: date-time
-                type: string
-              nextCheck:
-                description: |-
-                  NextCheck specifies the next scheduled check of the PVC by the
-                  controller.
-
-                  Deprecated: this field is deprecated and is no longer maintained by the pvc-autoscaler. It will be removed in a future release.
-                format: date-time
-                type: string
               volumeRecommendations:
                 description: VolumeRecommendations specifies the status and recommendations
                   for the PVCs managed by the autoscaler.

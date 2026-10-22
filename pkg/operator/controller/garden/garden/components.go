@@ -221,7 +221,7 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
-	c.pvcAutoscaler, err = r.newPVCAutoscaler(garden)
+	c.pvcAutoscaler, err = r.newPVCAutoscaler(garden, secretsManager)
 	if err != nil {
 		return
 	}
@@ -502,11 +502,13 @@ func (r *Reconciler) newVerticalPodAutoscaler(garden *operatorv1alpha1.Garden, s
 	return verticalPodAutoscaler, nil
 }
 
-func (r *Reconciler) newPVCAutoscaler(garden *operatorv1alpha1.Garden) (component.DeployWaiter, error) {
+func (r *Reconciler) newPVCAutoscaler(garden *operatorv1alpha1.Garden, secretsManager secretsmanager.Interface) (component.DeployWaiter, error) {
 	return sharedcomponent.NewPVCAutoscaler(
 		r.RuntimeClientSet.Client(),
 		r.GardenNamespace,
+		secretsManager,
 		pvcAutoscalerEnabled(garden.Spec.RuntimeCluster.Settings),
+		operatorv1alpha1.SecretNameCARuntime,
 		v1beta1constants.PriorityClassNameGardenSystem100,
 		true,
 	)

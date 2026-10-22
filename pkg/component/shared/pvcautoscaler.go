@@ -10,13 +10,16 @@ import (
 	"github.com/gardener/gardener/imagevector"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/autoscaling/pvcautoscaler"
+	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
 
 // NewPVCAutoscaler instantiates a new `PVCAutoscaler` component.
 func NewPVCAutoscaler(
 	c client.Client,
 	gardenNamespaceName string,
+	secretsManager secretsmanager.Interface,
 	enabled bool,
+	secretNameServerCA string,
 	priorityClassName string,
 	isGardenCluster bool,
 ) (
@@ -31,10 +34,12 @@ func NewPVCAutoscaler(
 	deployer = pvcautoscaler.NewPVCAutoscaler(
 		c,
 		gardenNamespaceName,
+		secretsManager,
 		pvcautoscaler.Values{
-			Image:             image.String(),
-			PriorityClassName: priorityClassName,
-			IsGardenCluster:   isGardenCluster,
+			Image:              image.String(),
+			PriorityClassName:  priorityClassName,
+			IsGardenCluster:    isGardenCluster,
+			SecretNameServerCA: secretNameServerCA,
 		},
 	)
 

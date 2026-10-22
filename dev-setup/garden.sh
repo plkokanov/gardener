@@ -69,7 +69,7 @@ case "$COMMAND" in
 
   down)
     kubectl --kubeconfig "$KUBECONFIG_VIRTUAL_GARDEN_CLUSTER" annotate projects $garden_name garden confirmation.gardener.cloud/deletion=true || true
-    kubectl annotate garden $garden_name confirmation.gardener.cloud/deletion=true || true
+    kubectl annotate garden $garden_name confirmation.gardener.cloud/kubdeletion=true || true
     kubectl delete garden $garden_name --wait=false --ignore-not-found
 
     echo "Waiting for the garden to be deleted..."

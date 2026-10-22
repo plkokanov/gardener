@@ -317,7 +317,7 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
-	c.pvcAutoscaler, err = r.newPVCAutoscaler(seed.GetInfo().Spec.Settings)
+	c.pvcAutoscaler, err = r.newPVCAutoscaler(seed.GetInfo().Spec.Settings, secretsManager)
 	if err != nil {
 		return
 	}
@@ -888,11 +888,13 @@ func (r *Reconciler) newFluentCustomResources(seedIsGarden bool) (deployer compo
 	)
 }
 
-func (r *Reconciler) newPVCAutoscaler(settings *gardencorev1beta1.SeedSettings) (component.DeployWaiter, error) {
+func (r *Reconciler) newPVCAutoscaler(settings *gardencorev1beta1.SeedSettings, secretsManager secretsmanager.Interface) (component.DeployWaiter, error) {
 	return sharedcomponent.NewPVCAutoscaler(
 		r.SeedClientSet.Client(),
 		r.GardenNamespace,
+		secretsManager,
 		v1beta1helper.SeedSettingPersistentVolumeClaimAutoscalerEnabled(settings),
+		v1beta1constants.SecretNameCASeed,
 		v1beta1constants.PriorityClassNameSeedSystem600,
 		false,
 	)
