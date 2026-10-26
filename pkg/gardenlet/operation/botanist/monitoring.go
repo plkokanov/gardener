@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	v1beta1helper "github.com/gardener/gardener/pkg/api/core/v1beta1/helper"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/alertmanager"
@@ -108,13 +109,18 @@ func (b *Botanist) DefaultPrometheus() (prometheus.Interface, error) {
 	values := prometheus.Values{
 		Name:                "shoot",
 		PriorityClassName:   v1beta1constants.PriorityClassNameShootControlPlane100,
-		StorageCapacity:     resource.MustParse(b.GetValidVolumeSize("20Gi")),
+		StorageCapacity:     resource.MustParse(b.GetValidVolumeSize("5Gi")),
 		ClusterType:         component.ClusterTypeShoot,
 		Replicas:            b.Shoot.GetReplicas(1),
 		Retention:           new(monitoringv1.Duration("30d")),
 		RetentionSize:       "15GB",
 		RestrictToNamespace: true,
 		HealthCheckBy:       prometheus.Gardenlet,
+		PVCAutoscaling: prometheus.PVCAutoscalingConfig{
+			Enabled:         v1beta1helper.SeedSettingPersistentVolumeClaimAutoscalerEnabled(b.Seed.GetInfo().Spec.Settings),
+			MaxCapacity:     resource.MustParse("40Gi"),
+			IsGardenCluster: false,
+		},
 		ResourceRequests: &corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("150m"),
 			corev1.ResourceMemory: resource.MustParse("400M"),

@@ -37,9 +37,9 @@ func (p *prometheus) prometheus(cortexConfigMap *corev1.ConfigMap) *monitoringv1
 			Labels:    p.getLabels(),
 		},
 		Spec: monitoringv1.PrometheusSpec{
-			RetentionSize:      p.values.RetentionSize,
 			EvaluationInterval: "1m",
 			CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
+				AdditionalArgs: []monitoringv1.Argument{},
 				ScrapeInterval: "1m",
 				ScrapeTimeout:  p.values.ScrapeTimeout,
 				ReloadStrategy: new(monitoringv1.HTTPReloadStrategyType),
@@ -116,6 +116,22 @@ func (p *prometheus) prometheus(cortexConfigMap *corev1.ConfigMap) *monitoringv1
 
 	if p.values.Retention != nil {
 		obj.Spec.Retention = *p.values.Retention
+	}
+
+	// TODO: temporary change for testing PVC autoscaling - enables the remote-write receiver so that the
+	// feed-prometheus-metrics.sh load-test script can push synthetic metrics. Revert before merging.
+	obj.Spec.CommonPrometheusFields.AdditionalArgs = append(obj.Spec.CommonPrometheusFields.AdditionalArgs, monitoringv1.Argument{
+		Name: "web.enable-remote-write-receiver",
+	})
+
+	// When PVC autoscaling is enabled, the PVC size is not static anymore, so a fixed retention size does not make
+	// sense. Instead, retention is driven relative to the (growing) disk via the retention-percentage setting (the
+	// maximum percentage of the data volume's capacity used by the Prometheus data). When it is disabled, the static
+	// retention size is used.
+	if p.values.PVCAutoscaling.Enabled {
+		obj.Spec.RetentionPercentage = new(resource.MustParse("90"))
+	} else {
+		obj.Spec.RetentionSize = p.values.RetentionSize
 	}
 
 	if p.values.Alerting != nil {

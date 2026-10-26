@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	pvcautoscalerv1alpha1 "github.com/gardener/pvc-autoscaler/api/autoscaling/v1alpha1"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -331,6 +332,9 @@ honor_labels: true`
 					RetentionSize:      retentionSize,
 					EvaluationInterval: "1m",
 					CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
+						// TODO: temporary change for testing PVC autoscaling - the remote-write receiver is enabled
+						// unconditionally in prometheus.go. Revert together with that change.
+						AdditionalArgs: []monitoringv1.Argument{{Name: "web.enable-remote-write-receiver"}},
 						ScrapeInterval: "1m",
 						ReloadStrategy: new(monitoringv1.HTTPReloadStrategyType),
 						ExternalLabels: externalLabels,
@@ -774,6 +778,67 @@ honor_labels: true`
 					secretAdditionalScrapeConfigs,
 					additionalConfigMap,
 				))
+			})
+
+			When("PVC autoscaling is enabled", func() {
+				var maxCapacity = resource.MustParse("40Gi")
+
+				BeforeEach(func() {
+					values.PVCAutoscaling = PVCAutoscalingConfig{
+						Enabled:     true,
+						MaxCapacity: maxCapacity,
+					}
+				})
+
+				It("should deploy a PersistentVolumeClaimAutoscaler targeting the Prometheus resource", func() {
+					Expect(managedResource).To(contain(
+						&pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscaler{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "prometheus-" + name,
+								Namespace: namespace,
+								Labels: map[string]string{
+									"app":  "prometheus",
+									"role": "monitoring",
+									"name": name,
+								},
+							},
+							Spec: pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscalerSpec{
+								AutoscalerName: "",
+								TargetRef: autoscalingv1.CrossVersionObjectReference{
+									APIVersion: "monitoring.coreos.com/v1",
+									Kind:       "Prometheus",
+									Name:       name,
+								},
+								VolumePolicies: []pvcautoscalerv1alpha1.VolumePolicy{{
+									MaxCapacity: maxCapacity,
+									ScaleUp: &pvcautoscalerv1alpha1.ScalingRules{
+										UtilizationThresholdPercent: new(70),
+										StepPercent:                 new(10),
+										MinStepAbsolute:             new(resource.MustParse("1Gi")),
+									},
+								}},
+							},
+						},
+					))
+				})
+
+				It("should drive retention via the retention-percentage setting and omit the static retention size", func() {
+					prometheusObj := prometheusFor(nil, false)
+					prometheusObj.Spec.RetentionSize = ""
+					prometheusObj.Spec.RetentionPercentage = new(resource.MustParse("90"))
+
+					Expect(managedResource).To(contain(prometheusObj))
+				})
+			})
+
+			When("PVC autoscaling is disabled", func() {
+				It("should not deploy a PersistentVolumeClaimAutoscaler and keep the static retention size", func() {
+					prometheusObj := prometheusFor(nil, false)
+					Expect(prometheusObj.Spec.RetentionSize).To(Equal(retentionSize))
+					Expect(prometheusObj.Spec.CommonPrometheusFields.AdditionalArgs).To(ConsistOf(monitoringv1.Argument{Name: "web.enable-remote-write-receiver"}))
+
+					Expect(managedResource).To(contain(prometheusObj))
+				})
 			})
 
 			When("namespace UID is set", func() {

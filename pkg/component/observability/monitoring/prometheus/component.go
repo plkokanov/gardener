@@ -98,6 +98,8 @@ type Values struct {
 	Retention *monitoringv1.Duration
 	// RetentionSize is the size for the data retention.
 	RetentionSize monitoringv1.ByteSize
+	// PVCAutoscaling configures whether and how the Prometheus PVC is autoscaled.
+	PVCAutoscaling PVCAutoscalingConfig
 	// RuntimeVersion is the Kubernetes version of the runtime cluster.
 	RuntimeVersion *semver.Version
 	// ScrapeTimeout is the timeout duration when scraping targets.
@@ -134,6 +136,17 @@ type Values struct {
 	ResourceRequests *corev1.ResourceList
 	// HealthCheckBy is the value of the health-check-by label for the Prometheus resource.
 	HealthCheckBy string
+}
+
+// PVCAutoscalingConfig configures whether and up to what capacity the Prometheus PVC is autoscaled.
+type PVCAutoscalingConfig struct {
+	// Enabled controls whether the component creates a PersistentVolumeClaimAutoscaler resource.
+	Enabled bool
+	// MaxCapacity is the upper bound up to which the PVC may be scaled.
+	MaxCapacity resource.Quantity
+	// IsGardenCluster indicates whether the Prometheus runs in a cluster registered as a Garden. It selects the
+	// pvc-autoscaler instance (named "garden" vs. the default unnamed seed instance) that manages the PVCA.
+	IsGardenCluster bool
 }
 
 // CentralConfigs contains configuration for this Prometheus instance that is created together with it. This should
@@ -293,6 +306,10 @@ func (p *prometheus) Deploy(ctx context.Context) error {
 		p.vpa(),
 		p.podDisruptionBudget(),
 	}, istioResources...)
+
+	if p.values.PVCAutoscaling.Enabled {
+		objects = append(objects, p.persistentVolumeClaimAutoscaler())
+	}
 
 	resources, err := registry.AddAllAndSerialize(objects...)
 	if err != nil {

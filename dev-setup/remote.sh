@@ -113,7 +113,7 @@ case "$command" in
     # ones based on the workload identity support. The other files are just touched.
     # All objects could coexist in the cluster, so it is possible to switch between workload identity and secret based credentials.
     if [[ "$workload_identity_support" == "true" ]]; then
-      ensure-config-file "$SCRIPT_DIR"/gardenconfig/overlays/remote/credentials/domains/domain-workload-identities.yaml
+      ensure-config-file "$SCRIPT_DIR"/gardenconfig/overlays/remote/credentia ptrhls/domains/domain-workload-identities.yaml
       ensure-config-file "$SCRIPT_DIR"/gardenconfig/overlays/remote/credentials/credentials-project-garden/infrastructure-workloadidentities.yaml
       ensure-config-file "$SCRIPT_DIR"/gardenconfig/overlays/remote/credentials/credentials-project-remote/infrastructure-workloadidentities.yaml
       touch "$SCRIPT_DIR"/gardenconfig/overlays/remote/credentials/domains/domain-secrets.yaml
@@ -316,10 +316,10 @@ case "$command" in
     until kubectl get clusterpolicies.kyverno.io ; do date; sleep 1; echo ""; done
     kubectl --server-side=true --force-conflicts=true apply -k "$SCRIPT_DIR"/remote/kyverno-policies
 
-    virtual_garden_kubeconfig=""
-    if [[ "$existing_gardens" != "" ]]; then
-      virtual_garden_kubeconfig="$KUBECONFIG_VIRTUAL_GARDEN_CLUSTER"
-    fi
+    # virtual_garden_kubeconfig=""
+    # if [[ "$existing_gardens" != "" ]]; then
+    #   virtual_garden_kubeconfig="$KUBECONFIG_VIRTUAL_GARDEN_CLUSTER"
+    # fi
     "$SCRIPT_DIR"/remote/registry/deploy-registry.sh "$KUBECONFIG" "$registry_domain" "$virtual_garden_kubeconfig"
     ;;
 
